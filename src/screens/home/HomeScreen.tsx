@@ -19,17 +19,18 @@ import { COLORS, TYPOGRAPHY, SPACING } from '../../styles/theme';
 
 interface HomeScreenProps {
   user: User;
+  previewMembers?: MemberStatus[];
 }
 
-const HomeScreen: React.FC<HomeScreenProps> = ({ user }) => {
+const HomeScreen: React.FC<HomeScreenProps> = ({ user, previewMembers }) => {
   const navigation = useNavigation();
-  const [members, setMembers] = useState<MemberStatus[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [members, setMembers] = useState<MemberStatus[]>(previewMembers ?? []);
+  const [loading, setLoading] = useState(!previewMembers);
   const [refreshing, setRefreshing] = useState(false);
   const unsubscribeRef = useRef<(() => void) | null>(null);
 
   const startListening = useCallback(() => {
-    if (!user.familyGroupId) return;
+    if (previewMembers || !user.familyGroupId) return;
 
     if (unsubscribeRef.current) {
       unsubscribeRef.current();
@@ -43,7 +44,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ user }) => {
         setRefreshing(false);
       },
     );
-  }, [user.familyGroupId]);
+  }, [user.familyGroupId, previewMembers]);
 
   useEffect(() => {
     startListening();

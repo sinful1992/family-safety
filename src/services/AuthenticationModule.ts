@@ -113,7 +113,7 @@ class AuthenticationModule {
       await this.storeAuthData(user, token);
       return { user, token };
     } catch (error: unknown) {
-      try { await GoogleSignin.signOut(); } catch (_) { /* ignore */ }
+      try { await GoogleSignin.signOut(); } catch { /* ignore */ }
 
       if (isErrorWithCode(error)) {
         switch (error.code) {
