@@ -75,7 +75,7 @@ const MemberDetailScreen: React.FC = () => {
     ? formatDistanceToNow(locationTimestamp, { addSuffix: true })
     : null;
 
-  // Live location/status subscription
+  // Live location/status subscription — subscribe once on mount for this specific member
   useEffect(() => {
     const groupId = currentUser.familyGroupId!;
     const ref = database().ref(`/familyGroups/${groupId}/memberStatus/${member.uid}`);
@@ -85,9 +85,9 @@ const MemberDetailScreen: React.FC = () => {
     };
     ref.on('value', handler);
     return () => ref.off('value', handler);
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Auto-ping on open
+  // Auto-ping on open — fire once; re-pinging is handled by handleReping
   useEffect(() => {
     if (isSelf || hasPingedRef.current || status === 'pending') return;
     hasPingedRef.current = true;
@@ -98,7 +98,7 @@ const MemberDetailScreen: React.FC = () => {
       member.displayName ?? 'your family member',
       currentUser.familyGroupId!,
     ).catch(() => {});
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleReping = async () => {
     setRepinging(true);
