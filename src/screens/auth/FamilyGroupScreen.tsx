@@ -219,7 +219,7 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.xxl,
     borderRadius: RADIUS.large,
     overflow: 'hidden',
-    backgroundColor: COLORS.glass.subtle,
+    backgroundColor: COLORS.background.secondary,
     borderWidth: 1,
     borderColor: COLORS.border.subtle,
   },

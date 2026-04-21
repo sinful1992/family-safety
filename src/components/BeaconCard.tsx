@@ -1,42 +1,23 @@
 import React from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-} from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { formatDistanceToNow } from 'date-fns';
 import { MemberStatus, CheckInStatus } from '../types';
 import StatusRing from './StatusRing';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../styles/theme';
 
-const AVATAR_SIZE = 64;
-const RING_SIZE = AVATAR_SIZE + 18;
+const AVATAR_SIZE = 42;
+const RING_SIZE = AVATAR_SIZE + 14;
 
 const STATUS_LABEL: Record<CheckInStatus, string> = {
-  okay: 'Okay',
-  pending: 'Checking in...',
+  okay:      'Okay',
+  pending:   'Pinging…',
   need_help: 'Needs help',
-  idle: 'Unknown',
-};
-
-const ROLE_EMOJI: Record<string, string> = {
-  Mom: '👩',
-  Dad: '👨',
-  Son: '👦',
-  Daughter: '👧',
-  Grandparent: '👴',
-  Other: '👤',
+  idle:      'Unknown',
 };
 
 function getInitials(name: string | null | undefined): string {
   if (!name) return '?';
-  return name
-    .split(' ')
-    .map(w => w[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2);
+  return name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
 }
 
 function getCheckInStatus(member: MemberStatus): CheckInStatus {
@@ -52,9 +33,9 @@ interface BeaconCardProps {
 const BeaconCard: React.FC<BeaconCardProps> = ({ member, onPress, isSelf }) => {
   const status = getCheckInStatus(member);
 
-  const statusColor =
-    status === 'okay' ? COLORS.status.okay :
-    status === 'pending' ? COLORS.status.pending :
+  const color =
+    status === 'okay'      ? COLORS.status.okay :
+    status === 'pending'   ? COLORS.status.pending :
     status === 'need_help' ? COLORS.status.needHelp :
     COLORS.status.unknown;
 
@@ -64,7 +45,7 @@ const BeaconCard: React.FC<BeaconCardProps> = ({ member, onPress, isSelf }) => {
     ? formatDistanceToNow(member.location.timestamp, { addSuffix: true })
     : null;
 
-  const roleEmoji = member.role ? (ROLE_EMOJI[member.role] ?? '👤') : '👤';
+  const firstName = member.displayName?.split(' ')[0] ?? 'Unknown';
 
   return (
     <TouchableOpacity
@@ -72,35 +53,39 @@ const BeaconCard: React.FC<BeaconCardProps> = ({ member, onPress, isSelf }) => {
       onPress={onPress}
       activeOpacity={0.8}
     >
-      {/* Beacon ring + avatar */}
-      <View style={styles.avatarContainer}>
-        <StatusRing status={status} size={RING_SIZE} ringWidth={2.5} />
-        <View style={[styles.avatar, { borderColor: statusColor }]}>
-          <Text style={styles.avatarText}>{getInitials(member.displayName)}</Text>
+      {/* Status strip across top */}
+      <View style={[styles.strip, { backgroundColor: color }, status === 'idle' && styles.stripHidden]} />
+
+      {/* Avatar + name/role row */}
+      <View style={styles.topRow}>
+        <View style={styles.avatarWrap}>
+          <StatusRing status={status} size={RING_SIZE} ringWidth={2} />
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText}>{getInitials(member.displayName)}</Text>
+          </View>
         </View>
-        <Text style={styles.roleEmoji}>{roleEmoji}</Text>
+
+        <View style={styles.nameCol}>
+          <View style={styles.nameRow}>
+            <Text style={styles.name} numberOfLines={1}>{firstName}</Text>
+            {isSelf && (
+              <View style={styles.youBadge}>
+                <Text style={styles.youText}>You</Text>
+              </View>
+            )}
+          </View>
+          {member.role && <Text style={styles.role}>{member.role}</Text>}
+        </View>
       </View>
 
-      {/* Name + role */}
-      <Text style={styles.name} numberOfLines={1}>
-        {member.displayName ?? 'Unknown'}{isSelf ? ' (You)' : ''}
-      </Text>
-      {member.role && (
-        <Text style={styles.role}>{member.role}</Text>
-      )}
-
-      {/* Status badge */}
-      <View style={[styles.statusBadge, { backgroundColor: `${statusColor}20`, borderColor: `${statusColor}50` }]}>
-        <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
-        <Text style={[styles.statusText, { color: statusColor }]}>
-          {STATUS_LABEL[status]}
-        </Text>
+      {/* Status pill + last seen */}
+      <View style={styles.bottomRow}>
+        <View style={styles.statusBadge}>
+          <View style={[styles.statusDot, { backgroundColor: color }]} />
+          <Text style={[styles.statusText, { color }]}>{STATUS_LABEL[status]}</Text>
+        </View>
+        {lastSeen && <Text style={styles.lastSeen}>{lastSeen}</Text>}
       </View>
-
-      {/* Last seen */}
-      {lastSeen && (
-        <Text style={styles.lastSeen}>{lastSeen}</Text>
-      )}
     </TouchableOpacity>
   );
 };
@@ -108,55 +93,99 @@ const BeaconCard: React.FC<BeaconCardProps> = ({ member, onPress, isSelf }) => {
 const styles = StyleSheet.create({
   card: {
     flex: 1,
-    backgroundColor: COLORS.glass.subtle,
-    borderRadius: RADIUS.xxlarge,
+    backgroundColor: COLORS.background.secondary,
+    borderRadius: 22,
     borderWidth: 1,
     borderColor: COLORS.border.subtle,
-    padding: SPACING.lg,
-    alignItems: 'center',
-    gap: SPACING.sm,
+    padding: SPACING.md,
+    paddingTop: SPACING.md + 2,
+    gap: SPACING.sm + 2,
+    overflow: 'hidden',
     ...SHADOWS.medium,
   },
   cardSelf: {
     borderColor: COLORS.border.medium,
-    backgroundColor: COLORS.glass.medium,
+    backgroundColor: COLORS.background.secondary,
   },
-  avatarContainer: {
+  strip: {
+    position: 'absolute',
+    top: 0,
+    left: 10,
+    right: 10,
+    height: 2,
+    borderRadius: 1,
+  },
+  topRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+  },
+  avatarWrap: {
     width: RING_SIZE,
     height: RING_SIZE,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: SPACING.xs,
+    flexShrink: 0,
   },
   avatar: {
     width: AVATAR_SIZE,
     height: AVATAR_SIZE,
     borderRadius: AVATAR_SIZE / 2,
     backgroundColor: COLORS.background.tertiary,
-    borderWidth: 2,
+    borderWidth: 1.5,
+    borderColor: COLORS.border.medium,
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarText: {
     color: COLORS.text.primary,
-    fontSize: TYPOGRAPHY.fontSize.xxl,
+    fontSize: TYPOGRAPHY.fontSize.md,
     fontWeight: TYPOGRAPHY.fontWeight.bold,
+    letterSpacing: -0.3,
   },
-  roleEmoji: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    fontSize: 18,
+  nameCol: {
+    flex: 1,
+    minWidth: 0,
+  },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 1,
+    flexWrap: 'nowrap',
   },
   name: {
     color: COLORS.text.primary,
-    fontSize: TYPOGRAPHY.fontSize.md,
+    fontSize: TYPOGRAPHY.fontSize.md - 0.5,
     fontWeight: TYPOGRAPHY.fontWeight.semibold,
-    textAlign: 'center',
+    letterSpacing: -0.1,
+    flexShrink: 1,
+  },
+  youBadge: {
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: RADIUS.small,
+    backgroundColor: COLORS.glass.medium,
+    borderWidth: 1,
+    borderColor: COLORS.border.subtle,
+    flexShrink: 0,
+  },
+  youText: {
+    color: COLORS.text.tertiary,
+    fontSize: 9.5,
+    fontWeight: TYPOGRAPHY.fontWeight.bold,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
   },
   role: {
     color: COLORS.text.tertiary,
-    fontSize: TYPOGRAPHY.fontSize.sm,
+    fontSize: TYPOGRAPHY.fontSize.xs + 1,
+  },
+  bottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: SPACING.xs,
   },
   statusBadge: {
     flexDirection: 'row',
@@ -166,6 +195,8 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.pill,
     borderWidth: 1,
     gap: 5,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderColor: COLORS.border.subtle,
   },
   statusDot: {
     width: 6,
@@ -179,6 +210,10 @@ const styles = StyleSheet.create({
   lastSeen: {
     color: COLORS.text.dim,
     fontSize: TYPOGRAPHY.fontSize.xs,
+    flexShrink: 1,
+  },
+  stripHidden: {
+    opacity: 0,
   },
 });
 

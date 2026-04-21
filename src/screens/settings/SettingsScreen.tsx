@@ -270,7 +270,7 @@ const styles = StyleSheet.create({
     color: COLORS.text.tertiary,
   },
   card: {
-    backgroundColor: COLORS.glass.subtle,
+    backgroundColor: COLORS.background.secondary,
     borderRadius: RADIUS.xlarge,
     borderWidth: 1,
     borderColor: COLORS.border.subtle,

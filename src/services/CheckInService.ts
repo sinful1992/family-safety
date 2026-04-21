@@ -96,6 +96,33 @@ class CheckInService {
     await database().ref(`/familyGroups/${groupId}/memberStatus/${userId}/location`).set(location);
   }
 
+  async sendHelpAlert(
+    userId: string,
+    displayName: string,
+    groupId: string,
+    location: Location,
+  ): Promise<void> {
+    const now = Date.now();
+
+    const updates: { [key: string]: any } = {};
+    updates[`/familyGroups/${groupId}/memberStatus/${userId}/location`] = location;
+    updates[`/familyGroups/${groupId}/memberStatus/${userId}/checkIn`] = {
+      status: 'need_help',
+      requestedBy: userId,
+      requestedByName: displayName,
+      requestedAt: now,
+      respondedAt: now,
+    };
+
+    await database().ref().update(updates);
+
+    supabase.functions
+      .invoke('send-help-alert', {
+        body: { sender_user_id: userId, sender_name: displayName, group_id: groupId },
+      })
+      .catch(() => {});
+  }
+
   async getCheckIn(checkInId: string): Promise<CheckInRecord | null> {
     const snap = await database().ref(`/checkIns/${checkInId}`).once('value');
     return snap.val();
