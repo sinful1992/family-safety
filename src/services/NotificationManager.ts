@@ -149,6 +149,16 @@ class NotificationManager {
           body: data.body as string,
           android: { channelId: CHANNEL_ID, importance: AndroidImportance.HIGH },
         });
+      } else if (data.type === 'help_alert') {
+        await notifee.displayNotification({
+          title: data.title as string,
+          body: data.body as string,
+          android: {
+            channelId: CHANNEL_ID,
+            importance: AndroidImportance.HIGH,
+            pressAction: { id: 'default' },
+          },
+        });
       }
     });
 
