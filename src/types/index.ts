@@ -17,6 +17,7 @@ export interface FamilyGroup {
   createdBy: string;
   memberIds: { [userId: string]: true };
   createdAt: number;
+  invitationCode?: string;
 }
 
 export interface Location {
