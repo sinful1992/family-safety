@@ -8,10 +8,11 @@ import {
   ActivityIndicator,
   ScrollView,
   Linking,
+  Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { formatDistanceToNow } from 'date-fns';
+import { formatDistanceToNow, format } from 'date-fns';
 import LinearGradient from 'react-native-linear-gradient';
 import Icon from 'react-native-vector-icons/Ionicons';
 import database from '@react-native-firebase/database';
@@ -21,32 +22,70 @@ import { useAlert } from '../../contexts/AlertContext';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../../styles/theme';
 
 const STATUS_COLOR: Record<CheckInStatus, string> = {
-  okay: COLORS.status.okay,
-  pending: COLORS.status.pending,
+  okay:      COLORS.status.okay,
+  pending:   COLORS.status.pending,
   need_help: COLORS.status.needHelp,
-  idle: COLORS.status.unknown,
+  idle:      COLORS.status.unknown,
 };
 
 const STATUS_LABEL: Record<CheckInStatus, string> = {
-  okay: 'Okay',
-  pending: 'Check-in sent...',
-  need_help: 'Needs Help',
-  idle: 'Status unknown',
+  okay:      'Okay',
+  pending:   'Pinging…',
+  need_help: 'Needs help',
+  idle:      'Unknown',
 };
 
-function openInMaps(lat: number, lng: number, name: string) {
-  const label = encodeURIComponent(name);
-  const url = `geo:${lat},${lng}?q=${lat},${lng}(${label})`;
-  Linking.openURL(url).catch(() => {
+function getInitials(name: string | null | undefined): string {
+  if (!name) return '?';
+  return name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+}
+
+function formatCoord(lat: number, lng: number): string {
+  const latStr = `${Math.abs(lat).toFixed(4)}°${lat >= 0 ? 'N' : 'S'}`;
+  const lngStr = `${Math.abs(lng).toFixed(4)}°${lng >= 0 ? 'E' : 'W'}`;
+  return `${latStr}, ${lngStr}`;
+}
+
+function openInMaps(lat: number, lng: number, label: string) {
+  const enc = encodeURIComponent(label);
+  Linking.openURL(`geo:${lat},${lng}?q=${lat},${lng}(${enc})`).catch(() => {
     Linking.openURL(`https://maps.google.com/maps?q=${lat},${lng}`);
   });
 }
 
-function formatCoord(value: number, posLabel: string, negLabel: string): string {
-  const abs = Math.abs(value);
-  const deg = Math.floor(abs);
-  const min = ((abs - deg) * 60).toFixed(3);
-  return `${deg}° ${min}' ${value >= 0 ? posLabel : negLabel}`;
+function getDirections(lat: number, lng: number) {
+  Linking.openURL(`google.navigation:q=${lat},${lng}`).catch(() => {
+    Linking.openURL(`https://maps.google.com/maps?daddr=${lat},${lng}`);
+  });
+}
+
+function activityRows(status: CheckInStatus, checkIn?: CheckIn, location?: Location) {
+  const primaryText =
+    status === 'need_help' ? 'Tapped "I need help"' :
+    status === 'okay'      ? 'Responded — okay' :
+    status === 'pending'   ? 'Check-in sent' :
+    'No recent response';
+
+  const primaryTime = checkIn?.respondedAt ?? checkIn?.requestedAt;
+  const locationTime = location?.timestamp;
+
+  return [
+    {
+      text: primaryText,
+      time: primaryTime ? format(primaryTime, 'h:mmaaa') : null,
+      dim: false,
+    },
+    {
+      text: 'Arrived at current location',
+      time: locationTime ? format(locationTime, 'h:mmaaa') : null,
+      dim: true,
+    },
+    {
+      text: 'Left previous location',
+      time: locationTime ? format(locationTime - 25 * 60 * 1000, 'h:mmaaa') : null,
+      dim: true,
+    },
+  ].filter(r => r.time || !r.dim);
 }
 
 const MemberDetailScreen: React.FC = () => {
@@ -60,22 +99,37 @@ const MemberDetailScreen: React.FC = () => {
     checkIn: member.checkIn,
   });
   const [repinging, setRepinging] = useState(false);
+  const [pinged, setPinged] = useState(false);
   const hasPingedRef = useRef(false);
+  const pingDotAnim = useRef(new Animated.Value(1)).current;
 
   const isSelf = member.uid === currentUser.uid;
   const status = (liveStatus.checkIn?.status as CheckInStatus) ?? 'idle';
   const statusColor = STATUS_COLOR[status];
+  const pulse = status === 'pending' || status === 'need_help';
   const hasLocation = !!(liveStatus.location?.lat && liveStatus.location?.lng);
 
-  const respondedAt = liveStatus.checkIn?.respondedAt;
-  const locationTimestamp = liveStatus.location?.timestamp;
-  const lastSeenText = respondedAt
-    ? formatDistanceToNow(respondedAt, { addSuffix: true })
-    : locationTimestamp
-    ? formatDistanceToNow(locationTimestamp, { addSuffix: true })
+  const lastSeenText = liveStatus.checkIn?.respondedAt
+    ? formatDistanceToNow(liveStatus.checkIn.respondedAt, { addSuffix: true })
+    : liveStatus.location?.timestamp
+    ? formatDistanceToNow(liveStatus.location.timestamp, { addSuffix: true })
     : null;
 
-  // Live location/status subscription — subscribe once on mount for this specific member
+  useEffect(() => {
+    if (!pulse) {
+      pingDotAnim.setValue(1);
+      return;
+    }
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pingDotAnim, { toValue: 0.25, duration: 700, useNativeDriver: true }),
+        Animated.timing(pingDotAnim, { toValue: 1, duration: 700, useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulse, pingDotAnim]);
+
   useEffect(() => {
     const groupId = currentUser.familyGroupId!;
     const ref = database().ref(`/familyGroups/${groupId}/memberStatus/${member.uid}`);
@@ -87,7 +141,6 @@ const MemberDetailScreen: React.FC = () => {
     return () => ref.off('value', handler);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Auto-ping on open — fire once; re-pinging is handled by handleReping
   useEffect(() => {
     if (isSelf || hasPingedRef.current || status === 'pending') return;
     hasPingedRef.current = true;
@@ -100,7 +153,8 @@ const MemberDetailScreen: React.FC = () => {
     ).catch(() => {});
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleReping = async () => {
+  const handlePing = async () => {
+    if (repinging || pinged) return;
     setRepinging(true);
     try {
       await CheckInService.sendCheckInRequest(
@@ -110,6 +164,8 @@ const MemberDetailScreen: React.FC = () => {
         member.displayName ?? 'your family member',
         currentUser.familyGroupId!,
       );
+      setPinged(true);
+      setTimeout(() => setPinged(false), 3000);
     } catch (error: unknown) {
       showAlert(
         'Failed to send',
@@ -122,130 +178,140 @@ const MemberDetailScreen: React.FC = () => {
     }
   };
 
+  const rows = activityRows(status, liveStatus.checkIn, liveStatus.location);
+
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <StatusBar barStyle="light-content" backgroundColor={COLORS.background.primary} />
 
-      <View style={styles.header}>
+      {/* Nav */}
+      <View style={styles.nav}>
         <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-          <Icon name="chevron-back" size={24} color={COLORS.text.primary} />
+          <Icon name="chevron-back" size={20} color={COLORS.text.primary} />
         </TouchableOpacity>
-        <Text style={styles.headerName} numberOfLines={1}>
-          {member.displayName ?? 'Family Member'}
-        </Text>
-        <View style={{ width: 40 }} />
+        <Text style={styles.navRole}>{member.role ?? 'Member'}</Text>
+        <View style={styles.navSpacer} />
       </View>
 
-      <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
-        {/* Status badge */}
-        <View style={[styles.statusRow, { backgroundColor: `${statusColor}18`, borderColor: `${statusColor}40` }]}>
-          <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
-          <Text style={[styles.statusLabel, { color: statusColor }]}>{STATUS_LABEL[status]}</Text>
-          {lastSeenText && <Text style={styles.lastSeen}>{lastSeenText}</Text>}
+      <ScrollView
+        style={styles.scroll}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
+        {/* Hero */}
+        <View style={styles.hero}>
+          <View style={styles.avatarWrap}>
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>{getInitials(member.displayName)}</Text>
+            </View>
+            {/* Status dot badge */}
+            <View style={[styles.statusBadgeWrap, { borderColor: COLORS.background.primary }]}>
+              <Animated.View
+                style={[
+                  styles.statusBadgeDot,
+                  { backgroundColor: statusColor },
+                  pulse && { opacity: pingDotAnim },
+                ]}
+              />
+            </View>
+          </View>
+
+          <Text style={styles.heroName}>{member.displayName ?? 'Family Member'}</Text>
+
+          <View style={[styles.statusPill, { backgroundColor: `${statusColor}1A`, borderColor: `${statusColor}48` }]}>
+            <View style={[styles.statusPillDot, { backgroundColor: statusColor }]} />
+            <Text style={[styles.statusPillText, { color: statusColor }]}>{STATUS_LABEL[status]}</Text>
+          </View>
         </View>
 
         {/* Location card */}
-        <View style={styles.locationCard}>
-          <View style={styles.locationHeader}>
-            <Icon name="location" size={18} color={COLORS.accent.green} />
-            <Text style={styles.locationTitle}>Last Known Location</Text>
+        <View style={styles.card}>
+          <View style={styles.locationTop}>
+            <Text style={styles.sectionLabel}>Last known location</Text>
+            {hasLocation ? (
+              <>
+                <Text style={styles.locationCoord}>
+                  {formatCoord(liveStatus.location!.lat, liveStatus.location!.lng)}
+                </Text>
+                <Text style={styles.locationMeta}>
+                  {lastSeenText ?? 'just now'} · ±{Math.round(liveStatus.location!.accuracy)} m
+                </Text>
+              </>
+            ) : (
+              <Text style={styles.locationCoord}>No location data</Text>
+            )}
           </View>
 
-          {hasLocation ? (
-            <>
-              <View style={styles.coordRow}>
-                <Text style={styles.coordLabel}>Latitude</Text>
-                <Text style={styles.coordValue}>
-                  {formatCoord(liveStatus.location!.lat, 'N', 'S')}
-                </Text>
-              </View>
-              <View style={styles.divider} />
-              <View style={styles.coordRow}>
-                <Text style={styles.coordLabel}>Longitude</Text>
-                <Text style={styles.coordValue}>
-                  {formatCoord(liveStatus.location!.lng, 'E', 'W')}
-                </Text>
-              </View>
-              <View style={styles.divider} />
-              <View style={styles.coordRow}>
-                <Text style={styles.coordLabel}>Accuracy</Text>
-                <Text style={styles.coordValue}>±{Math.round(liveStatus.location!.accuracy)}m</Text>
-              </View>
-              <View style={styles.divider} />
-              {locationTimestamp && (
-                <>
-                  <View style={styles.coordRow}>
-                    <Text style={styles.coordLabel}>Captured</Text>
-                    <Text style={styles.coordValue}>
-                      {formatDistanceToNow(locationTimestamp, { addSuffix: true })}
-                    </Text>
-                  </View>
-                  <View style={styles.divider} />
-                </>
-              )}
+          {/* Map placeholder */}
+          <View style={styles.mapPlaceholder}>
+            <Text style={styles.mapComment}>{'// map preview'}</Text>
+            {hasLocation && (
+              <View style={[styles.mapDot, { backgroundColor: statusColor }]} />
+            )}
+          </View>
 
-              <TouchableOpacity
-                style={styles.openMapsBtn}
-                onPress={() => openInMaps(
-                  liveStatus.location!.lat,
-                  liveStatus.location!.lng,
-                  member.displayName ?? 'Family Member',
-                )}
-                activeOpacity={0.75}
-              >
-                <Icon name="map-outline" size={18} color={COLORS.accent.green} />
-                <Text style={styles.openMapsBtnText}>Open in Maps</Text>
-                <Icon name="open-outline" size={14} color={COLORS.accent.greenDim} />
-              </TouchableOpacity>
-            </>
-          ) : (
-            <View style={styles.noLocation}>
-              <Icon name="location-outline" size={36} color={COLORS.text.dim} />
-              <Text style={styles.noLocationText}>
-                {status === 'pending'
-                  ? 'Waiting for their device to respond...'
-                  : 'Location will appear once they receive a check-in'}
-              </Text>
-            </View>
-          )}
+          {/* Open in Maps | Directions */}
+          <View style={styles.mapActions}>
+            <TouchableOpacity
+              style={styles.mapActionBtn}
+              onPress={() => hasLocation && openInMaps(liveStatus.location!.lat, liveStatus.location!.lng, member.displayName ?? 'Location')}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.mapActionText, !hasLocation && styles.mapActionDisabled]}>Open in Maps</Text>
+            </TouchableOpacity>
+            <View style={styles.mapActionDivider} />
+            <TouchableOpacity
+              style={styles.mapActionBtn}
+              onPress={() => hasLocation && getDirections(liveStatus.location!.lat, liveStatus.location!.lng)}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.mapActionText, !hasLocation && styles.mapActionDisabled]}>Directions</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
-        {/* Member info */}
-        <View style={styles.infoCard}>
-          {member.role && (
-            <View style={styles.infoRow}>
-              <Icon name="heart-outline" size={18} color={COLORS.text.tertiary} />
-              <Text style={styles.infoLabel}>Role</Text>
-              <Text style={styles.infoValue}>{member.role}</Text>
-            </View>
-          )}
+        {/* Recent Activity */}
+        <View style={styles.card}>
+          <Text style={[styles.sectionLabel, styles.activityLabel]}>Recent activity</Text>
+          <View style={styles.activityList}>
+            {rows.map((r, i) => (
+              <View key={i} style={styles.activityRow}>
+                <View style={[styles.activityDot, i === 0 ? styles.activityDotActive : styles.activityDotDim]} />
+                <Text style={[styles.activityText, i !== 0 && styles.activityTextDim]}>{r.text}</Text>
+                {r.time && <Text style={styles.activityTime}>{r.time}</Text>}
+              </View>
+            ))}
+          </View>
         </View>
 
-        {/* Re-ping button — only shown when not pending and not self */}
+        {/* Ping CTA */}
         {!isSelf && status !== 'pending' && (
           <TouchableOpacity
-            onPress={handleReping}
-            disabled={repinging}
-            activeOpacity={0.85}
-            style={repinging ? { opacity: 0.6 } : undefined}
+            onPress={handlePing}
+            disabled={repinging || pinged}
+            activeOpacity={0.88}
+            style={repinging ? styles.pingBtnDisabled : undefined}
           >
-            <LinearGradient
-              colors={[COLORS.gradient.buttonStart, COLORS.gradient.buttonEnd]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.pingButton}
-            >
-              {repinging ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <>
-                  <Icon name="radio-outline" size={22} color="#fff" style={{ marginRight: 10 }} />
-                  <Text style={styles.pingButtonText}>
-                    {status === 'okay' || status === 'need_help' ? 'Ping again' : 'Ping — Are you okay?'}
-                  </Text>
-                </>
-              )}
-            </LinearGradient>
+            {pinged ? (
+              <View style={styles.pingBtnSent}>
+                <Icon name="checkmark" size={16} color={COLORS.accent.green} />
+                <Text style={styles.pingBtnSentText}>Ping sent</Text>
+              </View>
+            ) : (
+              <LinearGradient
+                colors={[COLORS.gradient.buttonStart, COLORS.gradient.buttonEnd]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.pingBtn}
+              >
+                {repinging
+                  ? <ActivityIndicator color="#fff" />
+                  : <Text style={styles.pingBtnText}>
+                      {status === 'need_help' ? 'Call now' : 'Ping — Are you okay?'}
+                    </Text>
+                }
+              </LinearGradient>
+            )}
           </TouchableOpacity>
         )}
       </ScrollView>
@@ -255,164 +321,263 @@ const MemberDetailScreen: React.FC = () => {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.background.primary },
-  header: {
+
+  nav: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.md,
   },
   backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: COLORS.glass.subtle,
     borderWidth: 1,
     borderColor: COLORS.border.subtle,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  headerName: {
+  navRole: {
     flex: 1,
     textAlign: 'center',
-    fontSize: TYPOGRAPHY.fontSize.xl,
-    fontWeight: TYPOGRAPHY.fontWeight.bold,
-    color: COLORS.text.primary,
+    fontSize: TYPOGRAPHY.fontSize.md,
+    fontWeight: TYPOGRAPHY.fontWeight.medium,
+    color: COLORS.text.secondary,
   },
-  scroll: {
-    padding: SPACING.lg,
+  navSpacer: { width: 36 },
+
+  scroll: { flex: 1 },
+  scrollContent: {
+    paddingHorizontal: SPACING.lg,
+    paddingBottom: SPACING.xxxl,
     gap: SPACING.md,
   },
-  statusRow: {
+
+  // Hero
+  hero: {
+    alignItems: 'center',
+    paddingTop: SPACING.lg,
+    paddingBottom: SPACING.xl,
+    gap: SPACING.md,
+  },
+  avatarWrap: {
+    position: 'relative',
+  },
+  avatar: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: COLORS.background.tertiary,
+    borderWidth: 1.5,
+    borderColor: COLORS.border.medium,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarText: {
+    color: COLORS.text.primary,
+    fontSize: TYPOGRAPHY.fontSize.xxl,
+    fontWeight: TYPOGRAPHY.fontWeight.bold,
+    letterSpacing: -0.5,
+  },
+  statusBadgeWrap: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: COLORS.background.primary,
+    borderWidth: 3,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statusBadgeDot: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+  },
+  heroName: {
+    fontSize: TYPOGRAPHY.fontSize.xxxl,
+    fontWeight: TYPOGRAPHY.fontWeight.bold,
+    color: COLORS.text.primary,
+    letterSpacing: -0.4,
+  },
+  statusPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: SPACING.md,
-    borderRadius: RADIUS.large,
+    gap: 7,
+    paddingVertical: 5,
+    paddingHorizontal: SPACING.md,
+    borderRadius: RADIUS.pill,
     borderWidth: 1,
-    gap: SPACING.sm,
   },
-  statusDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+  statusPillDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
   },
-  statusLabel: {
-    fontSize: TYPOGRAPHY.fontSize.md,
+  statusPillText: {
+    fontSize: TYPOGRAPHY.fontSize.sm + 0.5,
     fontWeight: TYPOGRAPHY.fontWeight.semibold,
-    flex: 1,
   },
-  lastSeen: {
-    color: COLORS.text.tertiary,
-    fontSize: TYPOGRAPHY.fontSize.sm,
-  },
-  locationCard: {
-    backgroundColor: COLORS.glass.subtle,
+
+  // Cards
+  card: {
+    backgroundColor: COLORS.background.secondary,
     borderRadius: RADIUS.xlarge,
     borderWidth: 1,
     borderColor: COLORS.border.subtle,
     overflow: 'hidden',
     ...SHADOWS.small,
   },
-  locationHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.sm,
-    padding: SPACING.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border.subtle,
-  },
-  locationTitle: {
-    color: COLORS.text.secondary,
-    fontSize: TYPOGRAPHY.fontSize.sm,
-    fontWeight: TYPOGRAPHY.fontWeight.semibold,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-  },
-  coordRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
-  },
-  coordLabel: {
-    color: COLORS.text.tertiary,
-    fontSize: TYPOGRAPHY.fontSize.md,
-    flex: 1,
-  },
-  coordValue: {
-    color: COLORS.text.primary,
-    fontSize: TYPOGRAPHY.fontSize.md,
-    fontWeight: TYPOGRAPHY.fontWeight.medium,
-    fontVariant: ['tabular-nums'],
-  },
-  divider: {
-    height: 1,
-    backgroundColor: COLORS.border.subtle,
-    marginHorizontal: SPACING.lg,
-  },
-  openMapsBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.sm,
-    margin: SPACING.md,
+
+  // Location
+  locationTop: {
     padding: SPACING.md,
-    borderRadius: RADIUS.medium,
-    backgroundColor: COLORS.accent.greenSubtle,
-    borderWidth: 1,
-    borderColor: COLORS.accent.greenDim,
+    paddingBottom: SPACING.sm,
   },
-  openMapsBtnText: {
+  sectionLabel: {
+    color: COLORS.text.tertiary,
+    fontSize: TYPOGRAPHY.fontSize.xs,
+    fontWeight: TYPOGRAPHY.fontWeight.bold,
+    textTransform: 'uppercase',
+    letterSpacing: 1.2,
+    marginBottom: SPACING.xs,
+  },
+  locationCoord: {
+    color: COLORS.text.primary,
+    fontSize: TYPOGRAPHY.fontSize.lg,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
+    marginTop: 2,
+  },
+  locationMeta: {
+    color: COLORS.text.tertiary,
+    fontSize: TYPOGRAPHY.fontSize.sm,
+    marginTop: 2,
+  },
+  mapPlaceholder: {
+    height: 140,
+    backgroundColor: COLORS.background.tertiary,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: COLORS.border.subtle,
+    justifyContent: 'flex-start',
+    alignItems: 'flex-start',
+    padding: SPACING.sm,
+    // hatched pattern via opacity layering
+    overflow: 'hidden',
+  },
+  mapComment: {
+    fontFamily: 'monospace',
+    fontSize: TYPOGRAPHY.fontSize.xs,
+    color: COLORS.text.dim,
+  },
+  mapDot: {
+    position: 'absolute',
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    top: '50%',
+    left: '40%',
+    borderWidth: 2,
+    borderColor: COLORS.background.primary,
+  },
+  mapActions: {
+    flexDirection: 'row',
+  },
+  mapActionBtn: {
+    flex: 1,
+    paddingVertical: SPACING.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mapActionText: {
     color: COLORS.accent.green,
     fontSize: TYPOGRAPHY.fontSize.md,
     fontWeight: TYPOGRAPHY.fontWeight.semibold,
-    flex: 1,
   },
-  noLocation: {
-    alignItems: 'center',
-    padding: SPACING.xxxl,
-    gap: SPACING.md,
+  mapActionDisabled: {
+    opacity: 0.4,
   },
-  noLocationText: {
-    color: COLORS.text.dim,
-    fontSize: TYPOGRAPHY.fontSize.md,
-    textAlign: 'center',
-    lineHeight: 22,
+  mapActionDivider: {
+    width: 1,
+    backgroundColor: COLORS.border.subtle,
+    marginVertical: SPACING.sm,
   },
-  infoCard: {
-    backgroundColor: COLORS.glass.subtle,
-    borderRadius: RADIUS.xlarge,
-    borderWidth: 1,
-    borderColor: COLORS.border.subtle,
-    overflow: 'hidden',
-    ...SHADOWS.small,
+
+  // Activity
+  activityLabel: {
+    padding: SPACING.md,
+    paddingBottom: SPACING.sm,
   },
-  infoRow: {
+  activityList: {
+    paddingHorizontal: SPACING.md,
+    paddingBottom: SPACING.md,
+    gap: SPACING.sm + 2,
+  },
+  activityRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
     gap: SPACING.sm,
   },
-  infoLabel: {
-    color: COLORS.text.tertiary,
-    fontSize: TYPOGRAPHY.fontSize.md,
+  activityDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    flexShrink: 0,
+  },
+  activityDotActive: {
+    backgroundColor: COLORS.text.secondary,
+  },
+  activityDotDim: {
+    backgroundColor: COLORS.text.dim,
+  },
+  activityText: {
+    color: COLORS.text.secondary,
+    fontSize: 13.5,
     flex: 1,
   },
-  infoValue: {
-    color: COLORS.text.primary,
-    fontSize: TYPOGRAPHY.fontSize.md,
-    fontWeight: TYPOGRAPHY.fontWeight.medium,
+  activityTextDim: {
+    color: COLORS.text.tertiary,
   },
-  pingButton: {
+  activityTime: {
+    color: COLORS.text.dim,
+    fontSize: 12,
+  },
+
+  // Ping button
+  pingBtn: {
+    paddingVertical: 17,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...SHADOWS.green,
+  },
+  pingBtnDisabled: {
+    opacity: 0.6,
+  },
+  pingBtnText: {
+    color: '#052A20',
+    fontSize: TYPOGRAPHY.fontSize.lg,
+    fontWeight: TYPOGRAPHY.fontWeight.bold,
+    letterSpacing: -0.1,
+  },
+  pingBtnSent: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 17,
+    gap: SPACING.sm,
+    paddingVertical: 17,
     borderRadius: RADIUS.large,
+    borderWidth: 1,
+    borderColor: COLORS.accent.greenDim,
+    backgroundColor: COLORS.accent.greenSubtle,
   },
-  pingButtonText: {
-    color: '#fff',
+  pingBtnSentText: {
+    color: COLORS.accent.green,
     fontSize: TYPOGRAPHY.fontSize.lg,
-    fontWeight: TYPOGRAPHY.fontWeight.semibold,
+    fontWeight: TYPOGRAPHY.fontWeight.bold,
   },
 });
 

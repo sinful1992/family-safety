@@ -12,10 +12,24 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Ionicons';
-import { MemberStatus, User } from '../../types';
+import { MemberStatus, User, CheckInStatus } from '../../types';
 import FamilyMemberService from '../../services/FamilyMemberService';
+import CheckInService from '../../services/CheckInService';
 import BeaconCard from '../../components/BeaconCard';
+import FamilyPulse from '../../components/FamilyPulse';
+import NeedHelpSheet from '../../components/NeedHelpSheet';
 import { COLORS, TYPOGRAPHY, SPACING } from '../../styles/theme';
+
+function greeting(name: string | null | undefined): string {
+  const hour = new Date().getHours();
+  const salutation =
+    hour >= 5 && hour < 12 ? 'Good morning' :
+    hour >= 12 && hour < 18 ? 'Good afternoon' :
+    hour >= 18 && hour < 22 ? 'Good evening' :
+    'Good night';
+  const first = name?.split(' ')[0] ?? '';
+  return first ? `${salutation}, ${first}` : salutation;
+}
 
 interface HomeScreenProps {
   user: User;
@@ -27,14 +41,14 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ user, previewMembers }) => {
   const [members, setMembers] = useState<MemberStatus[]>(previewMembers ?? []);
   const [loading, setLoading] = useState(!previewMembers);
   const [refreshing, setRefreshing] = useState(false);
+  const [pinging, setPinging] = useState(false);
+  const [showNeedHelp, setShowNeedHelp] = useState(false);
   const unsubscribeRef = useRef<(() => void) | null>(null);
 
   const startListening = useCallback(() => {
     if (previewMembers || !user.familyGroupId) return;
 
-    if (unsubscribeRef.current) {
-      unsubscribeRef.current();
-    }
+    unsubscribeRef.current?.();
 
     unsubscribeRef.current = FamilyMemberService.listenToGroupMembers(
       user.familyGroupId,
@@ -48,11 +62,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ user, previewMembers }) => {
 
   useEffect(() => {
     startListening();
-    return () => {
-      if (unsubscribeRef.current) {
-        unsubscribeRef.current();
-      }
-    };
+    return () => { unsubscribeRef.current?.(); };
   }, [startListening]);
 
   const onRefresh = useCallback(() => {
@@ -68,8 +78,32 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ user, previewMembers }) => {
     (navigation as any).navigate('Settings', { user });
   };
 
+  const handlePingAll = useCallback(async () => {
+    if (pinging || !user.familyGroupId) return;
+    setPinging(true);
+    try {
+      const targets = members.filter(
+        m => m.uid !== user.uid && (m.checkIn?.status as CheckInStatus) !== 'okay',
+      );
+      await Promise.all(
+        targets.map(m =>
+          CheckInService.sendCheckInRequest(
+            user.uid,
+            user.displayName ?? 'A family member',
+            m.uid,
+            m.displayName ?? 'Family member',
+            user.familyGroupId!,
+          ).catch(() => {}),
+        ),
+      );
+    } finally {
+      setPinging(false);
+    }
+  }, [pinging, members, user]);
+
   const otherMembers = members.filter(m => m.uid !== user.uid);
   const selfMember = members.find(m => m.uid === user.uid);
+  const allMembers = selfMember ? [selfMember, ...otherMembers] : otherMembers;
 
   const renderItem = ({ item }: { item: MemberStatus }) => (
     <View style={styles.cardWrapper}>
@@ -81,9 +115,20 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ user, previewMembers }) => {
     </View>
   );
 
-  const allMembers = selfMember
-    ? [selfMember, ...otherMembers]
-    : otherMembers;
+  const listHeader = members.length > 0 ? (
+    <>
+      <FamilyPulse
+        members={allMembers}
+        pinging={pinging}
+        onPingAll={handlePingAll}
+        onNeedHelp={() => setShowNeedHelp(true)}
+      />
+      <View style={styles.memberCountRow}>
+        <Text style={styles.memberCountLabel}>{members.length} member{members.length !== 1 ? 's' : ''}</Text>
+        <Text style={styles.memberCountUpdated}>Updated just now</Text>
+      </View>
+    </>
+  ) : null;
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -92,12 +137,17 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ user, previewMembers }) => {
       {/* Header */}
       <View style={styles.header}>
         <View>
-          <Text style={styles.greeting}>Family</Text>
-          <Text style={styles.memberCount}>{members.length} member{members.length !== 1 ? 's' : ''}</Text>
+          <Text style={styles.greeting}>{greeting(user.displayName)}</Text>
+          <Text style={styles.title}>Family</Text>
         </View>
-        <TouchableOpacity style={styles.settingsBtn} onPress={handleSettingsPress}>
-          <Icon name="settings-outline" size={22} color={COLORS.text.secondary} />
-        </TouchableOpacity>
+        <View style={styles.headerBtns}>
+          <TouchableOpacity style={styles.iconBtn} onPress={handleSettingsPress}>
+            <Icon name="add" size={20} color={COLORS.text.secondary} />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.iconBtn} onPress={handleSettingsPress}>
+            <Icon name="settings-outline" size={18} color={COLORS.text.secondary} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {loading ? (
@@ -118,6 +168,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ user, previewMembers }) => {
           keyExtractor={item => item.uid}
           renderItem={renderItem}
           numColumns={2}
+          ListHeaderComponent={listHeader}
           contentContainerStyle={styles.grid}
           columnWrapperStyle={styles.row}
           showsVerticalScrollIndicator={false}
@@ -130,6 +181,12 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ user, previewMembers }) => {
           }
         />
       )}
+
+      <NeedHelpSheet
+        visible={showNeedHelp}
+        onClose={() => setShowNeedHelp(false)}
+        user={user}
+      />
     </SafeAreaView>
   );
 };
@@ -144,38 +201,62 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     paddingHorizontal: SPACING.xl,
-    paddingTop: SPACING.lg,
+    paddingTop: SPACING.md,
     paddingBottom: SPACING.md,
   },
   greeting: {
+    color: COLORS.text.tertiary,
+    fontSize: TYPOGRAPHY.fontSize.sm,
+    fontWeight: TYPOGRAPHY.fontWeight.medium,
+    letterSpacing: 0.2,
+  },
+  title: {
     fontSize: TYPOGRAPHY.fontSize.display,
     fontWeight: TYPOGRAPHY.fontWeight.black,
     color: COLORS.text.primary,
-    letterSpacing: -0.5,
+    letterSpacing: -0.6,
+    marginTop: 1,
   },
-  memberCount: {
-    fontSize: TYPOGRAPHY.fontSize.md,
-    color: COLORS.text.secondary,
-    marginTop: 2,
+  headerBtns: {
+    flexDirection: 'row',
+    gap: SPACING.sm - 1,
+    marginTop: 6,
   },
-  settingsBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  iconBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     backgroundColor: COLORS.glass.subtle,
     borderWidth: 1,
     borderColor: COLORS.border.subtle,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 6,
+  },
+  memberCountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: SPACING.xl,
+    paddingBottom: SPACING.sm,
+  },
+  memberCountLabel: {
+    color: COLORS.text.tertiary,
+    fontSize: TYPOGRAPHY.fontSize.xs,
+    fontWeight: TYPOGRAPHY.fontWeight.bold,
+    textTransform: 'uppercase',
+    letterSpacing: 1.2,
+  },
+  memberCountUpdated: {
+    color: COLORS.text.dim,
+    fontSize: TYPOGRAPHY.fontSize.xs + 1,
   },
   grid: {
-    padding: SPACING.lg,
-    paddingTop: SPACING.sm,
+    paddingBottom: SPACING.xl,
   },
   row: {
     gap: SPACING.md,
     marginBottom: SPACING.md,
+    paddingHorizontal: SPACING.lg,
   },
   cardWrapper: {
     flex: 1,

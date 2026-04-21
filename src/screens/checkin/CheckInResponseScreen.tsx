@@ -230,7 +230,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   messageCard: {
-    backgroundColor: COLORS.glass.elevated,
+    backgroundColor: COLORS.background.secondary,
     borderRadius: RADIUS.modal,
     borderWidth: 1,
     borderColor: COLORS.border.medium,
