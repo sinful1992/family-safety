@@ -13,8 +13,26 @@ import SplashScreen from 'react-native-splash-screen';
 import AuthenticationModule from './src/services/AuthenticationModule';
 import NotificationManager from './src/services/NotificationManager';
 import { AlertProvider } from './src/contexts/AlertContext';
-import { User } from './src/types';
+import { User, MemberStatus } from './src/types';
 import { COLORS } from './src/styles/theme';
+
+const DEV_PREVIEW = false;
+
+const PREVIEW_USER: User = {
+  uid: 'preview-user',
+  email: 'preview@example.com',
+  displayName: 'You',
+  familyGroupId: 'preview-group',
+  role: 'Dad',
+  createdAt: Date.now(),
+};
+
+const PREVIEW_MEMBERS: MemberStatus[] = [
+  { uid: 'preview-user', displayName: 'You', role: 'Dad', checkIn: { status: 'okay', requestedBy: 'preview-user', requestedByName: 'You', requestedAt: Date.now() - 120000, respondedAt: Date.now() - 60000 } },
+  { uid: 'preview-2', displayName: 'Sarah', role: 'Mom', checkIn: { status: 'pending', requestedBy: 'preview-user', requestedByName: 'You', requestedAt: Date.now() - 30000 } },
+  { uid: 'preview-3', displayName: 'Jake', role: 'Son', checkIn: { status: 'need_help', requestedBy: 'preview-user', requestedByName: 'You', requestedAt: Date.now() - 90000, respondedAt: Date.now() - 45000 } },
+  { uid: 'preview-4', displayName: 'Emma', role: 'Daughter' },
+];
 
 // Screens
 import LoginScreen from './src/screens/auth/LoginScreen';
@@ -50,18 +68,18 @@ function navigate(name: string, params?: object) {
   navigationRef.current?.navigate(name, params);
 }
 
-function HomeStack({ user }: { user: User }) {
+function HomeStack({ user, previewMembers }: { user: User; previewMembers?: MemberStatus[] }) {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="Family">
-        {() => <HomeScreen user={user} />}
+        {() => <HomeScreen user={user} previewMembers={previewMembers} />}
       </Stack.Screen>
       <Stack.Screen name="MemberDetail" component={MemberDetailScreen} />
     </Stack.Navigator>
   );
 }
 
-function MainTabs({ user }: { user: User }) {
+function MainTabs({ user, previewMembers }: { user: User; previewMembers?: MemberStatus[] }) {
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -84,7 +102,7 @@ function MainTabs({ user }: { user: User }) {
       })}
     >
       <Tab.Screen name="HomeTab" options={{ title: 'Family' }}>
-        {() => <HomeStack user={user} />}
+        {() => <HomeStack user={user} previewMembers={previewMembers} />}
       </Tab.Screen>
     </Tab.Navigator>
   );
@@ -109,13 +127,12 @@ function RootNavigator({ user }: { user: User | null }) {
     );
   }
 
-  // user and user.familyGroupId are both non-null here
   const authedUser = user as Required<Pick<User, 'familyGroupId'>> & User;
 
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="MainTabs">
-        {() => <MainTabs user={authedUser} />}
+        {() => <MainTabs user={authedUser} previewMembers={DEV_PREVIEW ? PREVIEW_MEMBERS : undefined} />}
       </Stack.Screen>
       <Stack.Screen name="Settings">
         {() => <SettingsScreen user={authedUser} />}
@@ -131,12 +148,16 @@ export default function App() {
   const [user, setUser] = useState<User | null | undefined>(undefined);
 
   useEffect(() => {
-    // Wire up notification navigation handler
+    if (DEV_PREVIEW) {
+      setUser(PREVIEW_USER);
+      SplashScreen.hide();
+      return;
+    }
+
     NotificationManager.setNavigationHandler((checkInId, groupId) => {
       navigate('CheckInResponse', { checkInId, groupId });
     });
 
-    // Listen for auth state changes
     const unsubscribe = AuthenticationModule.onAuthStateChanged(updatedUser => {
       setUser(updatedUser);
       SplashScreen.hide();

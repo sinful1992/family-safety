@@ -37,7 +37,7 @@ const CheckInResponseScreen: React.FC<CheckInResponseScreenProps> = ({ user }) =
     LocationService.getCurrentPosition()
       .then(loc => CheckInService.shareLocationImmediate(user.uid, groupId, loc))
       .catch(() => {});
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const unsubscribe = CheckInService.listenToCheckIn(checkInId, record => {

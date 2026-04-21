@@ -13,15 +13,6 @@ react {
  */
 def enableProguardInReleaseBuilds = true
 
-/**
- * The preferred build flavor of JavaScriptCore (JSC)
- */
-def jscFlavor = 'org.webkit:android-jsc:+'
-
-/**
- * Hermes engine enabled by default for React Native 0.74+
- */
-project.ext.hermesEnabled = (findProperty('hermesEnabled')?.toBoolean()) ?: true
 
 // Read version from package.json — single source of truth
 def packageJson = new groovy.json.JsonSlurper().parseText(file('../../package.json').text)
@@ -82,11 +73,7 @@ dependencies {
     // Flipper is optional for debugging - removed to simplify build
     // implementation("com.facebook.react:flipper-integration")
 
-    if (project.ext.hermesEnabled) {
-        implementation("com.facebook.react:hermes-android")
-    } else {
-        implementation jscFlavor
-    }
+    implementation("com.facebook.react:hermes-android")
 
     // Firebase - using autolinking via @react-native-firebase packages
     // No manual implementation needed, handled by React Native autolinking
