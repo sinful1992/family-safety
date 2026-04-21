@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   StatusBar,
   ScrollView,
   ActivityIndicator,
+  Share,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -29,6 +30,15 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ user }) => {
   const [signingOut, setSigningOut] = useState(false);
   const [savingRole, setSavingRole] = useState(false);
   const [currentRole, setCurrentRole] = useState(user.role ?? '');
+  const [invitationCode, setInvitationCode] = useState<string | null>(null);
+  const [generatingCode, setGeneratingCode] = useState(false);
+
+  useEffect(() => {
+    if (!user.familyGroupId) return;
+    AuthenticationModule.getUserFamilyGroup(user.uid).then(group => {
+      if (group?.invitationCode) setInvitationCode(group.invitationCode);
+    }).catch(() => {});
+  }, [user.uid, user.familyGroupId]);
 
   const handleRoleSelect = async (role: string) => {
     const newRole = role === currentRole ? '' : role;
@@ -91,6 +101,24 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ user }) => {
     );
   };
 
+  const handleShareCode = async () => {
+    if (!invitationCode) return;
+    await Share.share({ message: `Join my family group with code: ${invitationCode}` });
+  };
+
+  const handleGenerateCode = async () => {
+    if (!user.familyGroupId || generatingCode) return;
+    setGeneratingCode(true);
+    try {
+      const code = await AuthenticationModule.generateNewInvitationCode(user.familyGroupId);
+      setInvitationCode(code);
+    } catch {
+      showAlert('Error', 'Failed to generate invite code', undefined, { icon: 'error' });
+    } finally {
+      setGeneratingCode(false);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <StatusBar barStyle="light-content" backgroundColor={COLORS.background.primary} />
@@ -148,11 +176,26 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ user }) => {
           <View style={styles.section}>
             <Text style={styles.sectionLabel}>Family Group</Text>
             <View style={styles.card}>
-              <View style={styles.infoRow}>
-                <Icon name="key-outline" size={18} color={COLORS.text.tertiary} />
-                <Text style={styles.infoLabel}>Group ID</Text>
-                <Text style={styles.infoValue} numberOfLines={1}>{user.familyGroupId}</Text>
-              </View>
+              {invitationCode ? (
+                <TouchableOpacity style={styles.infoRow} onPress={handleShareCode}>
+                  <Icon name="key-outline" size={18} color={COLORS.text.tertiary} />
+                  <Text style={styles.infoLabel}>Invite Code</Text>
+                  <Text style={[styles.infoValue, { color: COLORS.accent.green, fontWeight: '700', letterSpacing: 2 }]}>
+                    {invitationCode}
+                  </Text>
+                  <Icon name="share-outline" size={18} color={COLORS.accent.green} style={{ marginLeft: 4 }} />
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity style={styles.infoRow} onPress={handleGenerateCode} disabled={generatingCode}>
+                  <Icon name="key-outline" size={18} color={COLORS.text.tertiary} />
+                  <Text style={styles.infoLabel}>Invite Code</Text>
+                  {generatingCode ? (
+                    <ActivityIndicator size="small" color={COLORS.accent.green} />
+                  ) : (
+                    <Text style={[styles.infoValue, { color: COLORS.accent.green }]}>Generate</Text>
+                  )}
+                </TouchableOpacity>
+              )}
             </View>
           </View>
         )}

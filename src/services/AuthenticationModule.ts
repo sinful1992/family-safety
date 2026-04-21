@@ -181,6 +181,7 @@ class AuthenticationModule {
         createdBy: userId,
         memberIds: { [userId]: true },
         createdAt: timestamp,
+        invitationCode,
       };
 
       const updates: { [key: string]: any } = {};
@@ -355,6 +356,15 @@ class AuthenticationModule {
     if (userData) {
       await EncryptedStorage.setItem(this.USER_KEY, JSON.stringify(userData));
     }
+  }
+
+  async generateNewInvitationCode(groupId: string): Promise<string> {
+    const code = this.generateInvitationCode();
+    const updates: { [key: string]: any } = {};
+    updates[`/invitations/${code}`] = { groupId, createdAt: Date.now() };
+    updates[`/familyGroups/${groupId}/invitationCode`] = code;
+    await database().ref().update(updates);
+    return code;
   }
 
   private generateInvitationCode(): string {
