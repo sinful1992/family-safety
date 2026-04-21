@@ -13,10 +13,14 @@ yarn-error.log*
 android/app/build/
 android/build/
 android/.gradle/
+android/app/.cxx/
 android/local.properties
 android/app/google-services.json
 *.keystore
 !debug.keystore
+
+# IDE
+.idea/
 
 # iOS
 ios/build/

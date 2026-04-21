@@ -8,6 +8,7 @@ plugins {
  * This is the configuration block to customize your React Native Android app.
  */
 react {
+    autolinkLibrariesWithApp()
 }
 
 /**
