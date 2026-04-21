@@ -1,0 +1,87 @@
+name: Build Android
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node 18
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Write .env
+        env:
+          FIREBASE_API_KEY: ${{ secrets.FIREBASE_API_KEY }}
+          FIREBASE_AUTH_DOMAIN: ${{ secrets.FIREBASE_AUTH_DOMAIN }}
+          FIREBASE_DATABASE_URL: ${{ secrets.FIREBASE_DATABASE_URL }}
+          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+          FIREBASE_STORAGE_BUCKET: ${{ secrets.FIREBASE_STORAGE_BUCKET }}
+          FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.FIREBASE_MESSAGING_SENDER_ID }}
+          FIREBASE_APP_ID: ${{ secrets.FIREBASE_APP_ID }}
+          GOOGLE_WEB_CLIENT_ID: ${{ secrets.GOOGLE_WEB_CLIENT_ID }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          printf "FIREBASE_API_KEY=%s\n" "$FIREBASE_API_KEY" >> .env
+          printf "FIREBASE_AUTH_DOMAIN=%s\n" "$FIREBASE_AUTH_DOMAIN" >> .env
+          printf "FIREBASE_DATABASE_URL=%s\n" "$FIREBASE_DATABASE_URL" >> .env
+          printf "FIREBASE_PROJECT_ID=%s\n" "$FIREBASE_PROJECT_ID" >> .env
+          printf "FIREBASE_STORAGE_BUCKET=%s\n" "$FIREBASE_STORAGE_BUCKET" >> .env
+          printf "FIREBASE_MESSAGING_SENDER_ID=%s\n" "$FIREBASE_MESSAGING_SENDER_ID" >> .env
+          printf "FIREBASE_APP_ID=%s\n" "$FIREBASE_APP_ID" >> .env
+          printf "GOOGLE_WEB_CLIENT_ID=%s\n" "$GOOGLE_WEB_CLIENT_ID" >> .env
+          printf "SUPABASE_URL=%s\n" "$SUPABASE_URL" >> .env
+          printf "SUPABASE_ANON_KEY=%s\n" "$SUPABASE_ANON_KEY" >> .env
+
+      - name: Write google-services.json
+        run: echo "${{ secrets.GOOGLE_SERVICES_JSON }}" | base64 -d > android/app/google-services.json
+
+      - name: Write keystore
+        run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > android/app/upload-key.keystore
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: ${{ runner.os }}-gradle-
+
+      - name: Make gradlew executable
+        run: chmod +x android/gradlew
+
+      - name: Build release AAB
+        run: |
+          cd android && ./gradlew bundleRelease \
+            -PMYAPP_RELEASE_STORE_FILE=upload-key.keystore \
+            -PMYAPP_RELEASE_STORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }} \
+            -PMYAPP_RELEASE_KEY_ALIAS=${{ secrets.KEY_ALIAS }} \
+            -PMYAPP_RELEASE_KEY_PASSWORD=${{ secrets.KEY_PASSWORD }} \
+            -PreactNativeArchitectures=armeabi-v7a,arm64-v8a
+
+      - name: Upload AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-${{ github.run_number }}
+          path: android/app/build/outputs/bundle/release/app-release.aab
+          retention-days: 30

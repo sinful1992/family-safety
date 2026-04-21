@@ -1,0 +1,37 @@
+{
+  "rules": {
+    "users": {
+      "$uid": {
+        ".read": "auth != null && (auth.uid === $uid || root.child('familyGroups').child(root.child('users').child($uid).child('familyGroupId').val()).child('memberIds').hasChild(auth.uid))",
+        ".write": "auth != null && auth.uid === $uid",
+        ".validate": "newData.hasChildren(['uid', 'email', 'createdAt'])"
+      }
+    },
+    "familyGroups": {
+      "$groupId": {
+        ".read": "auth != null && data.child('memberIds').hasChild(auth.uid)",
+        ".write": "auth != null && (data.child('memberIds').hasChild(auth.uid) || !data.exists())",
+        "memberStatus": {
+          "$uid": {
+            ".write": "auth != null && auth.uid === $uid",
+            ".validate": "newData.hasChildren(['uid']) || !newData.exists()"
+          }
+        }
+      }
+    },
+    "checkIns": {
+      "$checkInId": {
+        ".read": "auth != null",
+        ".write": "auth != null",
+        ".validate": "newData.hasChildren(['id', 'groupId', 'requestedBy', 'targetUserId', 'requestedAt'])"
+      }
+    },
+    "invitations": {
+      "$code": {
+        ".read": "auth != null",
+        ".write": "auth != null",
+        ".validate": "newData.hasChildren(['groupId', 'createdAt'])"
+      }
+    }
+  }
+}
