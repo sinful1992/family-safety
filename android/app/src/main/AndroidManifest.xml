@@ -7,6 +7,16 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
+    <!-- Emergency screen lock -->
+    <uses-permission android:name="android.permission.BIND_DEVICE_ADMIN" />
+
+    <!-- PLACEHOLDER: required when recording feature is enabled -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+
     <application
       android:name=".MainApplication"
       android:label="@string/app_name"
@@ -27,5 +37,24 @@
             <category android:name="android.intent.category.LAUNCHER" />
         </intent-filter>
       </activity>
+
+      <!-- Device Admin receiver for emergency screen lock -->
+      <receiver
+          android:name=".FamilySafetyDeviceAdminReceiver"
+          android:permission="android.permission.BIND_DEVICE_ADMIN"
+          android:exported="true">
+          <meta-data
+              android:name="android.app.device_admin"
+              android:resource="@xml/device_admin" />
+          <intent-filter>
+              <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
+          </intent-filter>
+      </receiver>
+
+      <!-- PLACEHOLDER: foreground service for emergency recording (not active) -->
+      <service
+          android:name=".EmergencyRecordingService"
+          android:foregroundServiceType="camera|microphone"
+          android:exported="false" />
     </application>
 </manifest>

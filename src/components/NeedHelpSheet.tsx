@@ -11,6 +11,8 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import LinearGradient from 'react-native-linear-gradient';
 import CheckInService from '../services/CheckInService';
 import LocationService from '../services/LocationService';
+import DeviceLockService from '../services/DeviceLockService';
+import EmergencyRecordingService from '../services/EmergencyRecordingService';
 import { User } from '../types';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../styles/theme';
 
@@ -73,6 +75,8 @@ const NeedHelpSheet: React.FC<NeedHelpSheetProps> = ({ visible, onClose, user })
         user.familyGroupId,
         location,
       );
+      DeviceLockService.lock();
+      EmergencyRecordingService.start(user.uid, user.familyGroupId);
       setSent(true);
       setTimeout(onClose, 1800);
     } catch {

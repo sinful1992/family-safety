@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,11 +10,12 @@ import {
   Share,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { User } from '../../types';
 import AuthenticationModule from '../../services/AuthenticationModule';
 import NotificationManager from '../../services/NotificationManager';
+import DeviceLockService from '../../services/DeviceLockService';
 import { useAlert } from '../../contexts/AlertContext';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../../styles/theme';
 
@@ -32,6 +33,11 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ user }) => {
   const [currentRole, setCurrentRole] = useState(user.role ?? '');
   const [invitationCode, setInvitationCode] = useState<string | null>(null);
   const [generatingCode, setGeneratingCode] = useState(false);
+  const [deviceAdminActive, setDeviceAdminActive] = useState(false);
+
+  useFocusEffect(useCallback(() => {
+    DeviceLockService.isActive().then(setDeviceAdminActive);
+  }, []));
 
   useEffect(() => {
     if (!user.familyGroupId) return;
@@ -200,6 +206,42 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ user }) => {
           </View>
         )}
 
+        {/* Emergency Protection */}
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Emergency Protection</Text>
+          <View style={styles.card}>
+            <View style={styles.protectionRow}>
+              <View style={[styles.protectionIcon, deviceAdminActive && styles.protectionIconActive]}>
+                <Icon
+                  name={deviceAdminActive ? 'shield-checkmark' : 'shield-outline'}
+                  size={20}
+                  color={deviceAdminActive ? COLORS.accent.green : COLORS.text.tertiary}
+                />
+              </View>
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text style={styles.protectionTitle}>Screen Lock on Alert</Text>
+                <Text style={styles.protectionDesc}>
+                  {deviceAdminActive
+                    ? 'Active — phone locks instantly when you send a help alert'
+                    : 'Grant permission so the phone locks when you send a help alert'}
+                </Text>
+              </View>
+              {deviceAdminActive ? (
+                <View style={styles.activeBadge}>
+                  <Text style={styles.activeBadgeText}>Active</Text>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  style={styles.enableBtn}
+                  onPress={() => DeviceLockService.requestPermission()}
+                >
+                  <Text style={styles.enableBtnText}>Enable</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        </View>
+
         {/* Actions */}
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>Account</Text>
@@ -364,6 +406,65 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: COLORS.border.subtle,
     marginHorizontal: SPACING.lg,
+  },
+  protectionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: SPACING.lg,
+    gap: SPACING.md,
+  },
+  protectionIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: RADIUS.medium,
+    backgroundColor: COLORS.glass.subtle,
+    borderWidth: 1,
+    borderColor: COLORS.border.subtle,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  protectionIconActive: {
+    backgroundColor: COLORS.accent.greenSubtle,
+    borderColor: COLORS.accent.greenDim,
+  },
+  protectionTitle: {
+    color: COLORS.text.primary,
+    fontSize: TYPOGRAPHY.fontSize.md,
+    fontWeight: TYPOGRAPHY.fontWeight.medium,
+  },
+  protectionDesc: {
+    color: COLORS.text.tertiary,
+    fontSize: TYPOGRAPHY.fontSize.sm,
+    lineHeight: 18,
+  },
+  activeBadge: {
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 3,
+    borderRadius: RADIUS.pill,
+    backgroundColor: COLORS.accent.greenSubtle,
+    borderWidth: 1,
+    borderColor: COLORS.accent.greenDim,
+  },
+  activeBadgeText: {
+    color: COLORS.accent.green,
+    fontSize: TYPOGRAPHY.fontSize.xs,
+    fontWeight: TYPOGRAPHY.fontWeight.bold,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+  },
+  enableBtn: {
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.xs + 2,
+    borderRadius: RADIUS.pill,
+    backgroundColor: COLORS.accent.redSubtle,
+    borderWidth: 1,
+    borderColor: COLORS.accent.redDim,
+  },
+  enableBtnText: {
+    color: COLORS.accent.red,
+    fontSize: TYPOGRAPHY.fontSize.sm,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
   },
 });
 
