@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -14,6 +14,8 @@ import LocationService from '../services/LocationService';
 import { User } from '../types';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../styles/theme';
 
+const AUTO_SEND_SECONDS = 10;
+
 interface NeedHelpSheetProps {
   visible: boolean;
   onClose: () => void;
@@ -23,19 +25,45 @@ interface NeedHelpSheetProps {
 const NeedHelpSheet: React.FC<NeedHelpSheetProps> = ({ visible, onClose, user }) => {
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
+  const [countdown, setCountdown] = useState(AUTO_SEND_SECONDS);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const clearCountdown = () => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+  };
 
   useEffect(() => {
-    if (!visible) {
+    if (visible) {
+      setCountdown(AUTO_SEND_SECONDS);
+      intervalRef.current = setInterval(() => {
+        setCountdown(prev => prev - 1);
+      }, 1000);
+    } else {
+      clearCountdown();
       const t = setTimeout(() => {
         setSent(false);
         setSending(false);
+        setCountdown(AUTO_SEND_SECONDS);
       }, 300);
       return () => clearTimeout(t);
     }
+    return clearCountdown;
   }, [visible]);
+
+  useEffect(() => {
+    if (countdown <= 0 && visible && !sending && !sent) {
+      clearCountdown();
+      handleSend();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [countdown]);
 
   const handleSend = async () => {
     if (sending || sent || !user.familyGroupId) return;
+    clearCountdown();
     setSending(true);
     try {
       const location = await LocationService.getCurrentPosition();
@@ -52,16 +80,21 @@ const NeedHelpSheet: React.FC<NeedHelpSheetProps> = ({ visible, onClose, user })
     }
   };
 
+  const handleCancel = () => {
+    clearCountdown();
+    onClose();
+  };
+
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={onClose} />
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={handleCancel}>
+      <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={handleCancel} />
 
       <View style={styles.sheet}>
         <View style={styles.handle} />
 
         <View style={styles.warningCard}>
           <View style={styles.warningIconWrap}>
-            <Icon name="warning-outline" size={20} color={COLORS.accent.red} />
+            <Icon name="warning" size={22} color="#fff" />
           </View>
           <View style={styles.warningTextCol}>
             <Text style={styles.warningTitle}>I need help</Text>
@@ -84,15 +117,18 @@ const NeedHelpSheet: React.FC<NeedHelpSheetProps> = ({ visible, onClose, user })
               colors={[COLORS.gradient.dangerStart, COLORS.gradient.dangerEnd]}
               style={[styles.sendBtn, sending && styles.sendBtnDisabled]}
             >
-              {sending
-                ? <ActivityIndicator color="#fff" />
-                : <Text style={styles.sendBtnText}>Send alert to family</Text>
-              }
+              {sending ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.sendBtnText}>
+                  Send alert to family{countdown < AUTO_SEND_SECONDS ? ` (${countdown}s)` : ''}
+                </Text>
+              )}
             </LinearGradient>
           </TouchableOpacity>
         )}
 
-        <TouchableOpacity style={styles.cancelBtn} onPress={onClose}>
+        <TouchableOpacity style={styles.cancelBtn} onPress={handleCancel}>
           <Text style={styles.cancelText}>Cancel</Text>
         </TouchableOpacity>
       </View>
@@ -133,7 +169,7 @@ const styles = StyleSheet.create({
     gap: SPACING.md,
     padding: SPACING.md,
     borderRadius: RADIUS.large,
-    backgroundColor: COLORS.accent.redSubtle,
+    backgroundColor: COLORS.background.primary,
     borderWidth: 1,
     borderColor: COLORS.accent.redDim,
     marginBottom: SPACING.md,
@@ -142,16 +178,16 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   warningIconWrap: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     borderRadius: RADIUS.medium,
-    backgroundColor: 'rgba(255, 69, 58, 0.16)',
+    backgroundColor: COLORS.accent.red,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
   },
   warningTitle: {
-    color: COLORS.accent.red,
+    color: COLORS.text.primary,
     fontSize: TYPOGRAPHY.fontSize.md,
     fontWeight: TYPOGRAPHY.fontWeight.bold,
   },
