@@ -124,7 +124,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ user, previewMembers }) => {
         onNeedHelp={() => setShowNeedHelp(true)}
       />
       <View style={styles.memberCountRow}>
-        <Text style={styles.memberCountLabel}>{members.length} member{members.length !== 1 ? 's' : ''}</Text>
+        <Text style={styles.memberCountLabel}>{otherMembers.length} member{otherMembers.length !== 1 ? 's' : ''}</Text>
         <Text style={styles.memberCountUpdated}>Updated just now</Text>
       </View>
     </>
@@ -154,7 +154,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ user, previewMembers }) => {
         <View style={styles.centered}>
           <ActivityIndicator size="large" color={COLORS.accent.green} />
         </View>
-      ) : members.length === 0 ? (
+      ) : otherMembers.length === 0 ? (
         <View style={styles.centered}>
           <Icon name="people-outline" size={56} color={COLORS.text.dim} />
           <Text style={styles.emptyTitle}>No family members yet</Text>
@@ -164,7 +164,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ user, previewMembers }) => {
         </View>
       ) : (
         <FlatList
-          data={allMembers}
+          data={otherMembers}
           keyExtractor={item => item.uid}
           renderItem={renderItem}
           numColumns={2}
