@@ -15,6 +15,7 @@ class NotificationManager {
   private fcmToken: string | null = null;
   private readonly FCM_TOKEN_KEY = '@fcm_token';
   private navigateToCheckIn: NavigateToCheckIn | null = null;
+  private listenersInitialized = false;
 
   setNavigationHandler(handler: NavigateToCheckIn): void {
     this.navigateToCheckIn = handler;
@@ -108,6 +109,9 @@ class NotificationManager {
   }
 
   initializeListeners(): void {
+    if (this.listenersInitialized) return;
+    this.listenersInitialized = true;
+
     // Foreground: data-only FCM message received
     messaging().onMessage(async remoteMessage => {
       const data = remoteMessage.data;

@@ -150,7 +150,14 @@ const MemberDetailScreen: React.FC = () => {
       member.uid,
       member.displayName ?? 'your family member',
       currentUser.familyGroupId!,
-    ).catch(() => {});
+    ).catch((error: unknown) => {
+      showAlert(
+        'Failed to send ping',
+        error instanceof Error ? error.message : 'Something went wrong.',
+        undefined,
+        { icon: 'error' },
+      );
+    });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handlePing = async () => {

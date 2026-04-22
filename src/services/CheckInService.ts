@@ -36,19 +36,22 @@ class CheckInService {
 
     await database().ref().update(updates);
 
-    // Fire-and-forget FCM via Supabase
-    supabase.functions
-      .invoke('send-checkin-request', {
+    try {
+      const { error } = await supabase.functions.invoke('send-checkin-request', {
         body: {
           check_in_id: checkInId,
           target_user_id: targetUserId,
           requester_name: requesterName,
           group_id: groupId,
         },
-      })
-      .catch(() => {
-        // Non-critical — check-in record already in Firebase
       });
+      if (error) throw error;
+    } catch (fcmError) {
+      // Rollback pending status — target was never notified
+      await database().ref(`/checkIns/${checkInId}`).remove().catch(() => {});
+      await database().ref(`/familyGroups/${groupId}/memberStatus/${targetUserId}/checkIn`).remove().catch(() => {});
+      throw new Error(`Failed to send ping: ${fcmError instanceof Error ? fcmError.message : String(fcmError)}`);
+    }
 
     return checkInId;
   }

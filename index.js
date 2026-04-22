@@ -48,12 +48,14 @@ messaging().setBackgroundMessageHandler(async remoteMessage => {
   await ensureChannel();
 
   if (data.type === 'check_in_request') {
-    const user = auth().currentUser;
-    if (user) {
-      const snap = await database().ref(`/users/${user.uid}/familyGroupId`).once('value');
-      const familyGroupId = snap.val();
-      if (familyGroupId) await captureAndWriteLocation(user.uid, familyGroupId);
-    }
+    try {
+      const user = auth().currentUser;
+      if (user) {
+        const snap = await database().ref(`/users/${user.uid}/familyGroupId`).once('value');
+        const familyGroupId = snap.val();
+        if (familyGroupId) await captureAndWriteLocation(user.uid, familyGroupId);
+      }
+    } catch { }
   }
 
   await notifee.displayNotification({
