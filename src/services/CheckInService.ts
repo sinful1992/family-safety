@@ -45,7 +45,14 @@ class CheckInService {
           group_id: groupId,
         },
       });
-      if (error) throw error;
+      if (error) {
+        let reason = error.message;
+        try {
+          const body = await (error as any).context?.json?.();
+          if (body?.error) reason = body.error;
+        } catch {}
+        throw new Error(reason);
+      }
     } catch (fcmError) {
       // Rollback pending status — target was never notified
       await database().ref(`/checkIns/${checkInId}`).remove().catch(() => {});

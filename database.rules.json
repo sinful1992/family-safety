@@ -18,8 +18,7 @@
         },
         "memberStatus": {
           "$uid": {
-            ".write": "auth != null && auth.uid === $uid",
-            ".validate": "newData.hasChildren(['uid']) || !newData.exists()"
+            ".write": "auth != null && (auth.uid === $uid || root.child('familyGroups').child($groupId).child('memberIds').hasChild(auth.uid))"
           }
         }
       }
