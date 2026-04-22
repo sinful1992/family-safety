@@ -11,6 +11,11 @@
       "$groupId": {
         ".read": "auth != null && data.child('memberIds').hasChild(auth.uid)",
         ".write": "auth != null && (data.child('memberIds').hasChild(auth.uid) || !data.exists())",
+        "memberIds": {
+          "$uid": {
+            ".write": "auth != null && auth.uid === $uid"
+          }
+        },
         "memberStatus": {
           "$uid": {
             ".write": "auth != null && auth.uid === $uid",
