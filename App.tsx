@@ -161,7 +161,49 @@ function PermissionOnboarding({ user }: { user: User | null }) {
     (async () => {
       NotificationManager.initializeListeners();
       await NotificationManager.registerToken(uid, groupId);
-      await LocationService.requestPermission().catch(() => {});
+
+      const hasForeground = await LocationService.hasForegroundPermission();
+      const locGranted = hasForeground
+        ? true
+        : await new Promise<boolean>(resolve => {
+            showAlert(
+              'Location Permission',
+              'Family Safety needs your location to respond to check-ins.',
+              [
+                { text: 'Deny', style: 'cancel', onPress: () => resolve(false) },
+                {
+                  text: 'Allow',
+                  style: 'default',
+                  onPress: async () => {
+                    const result = await LocationService.requestPermission().catch(() => 'denied' as const);
+                    resolve(result === 'granted');
+                  },
+                },
+              ],
+              { icon: 'info' },
+            );
+          });
+
+      if (locGranted && !(await LocationService.hasBackgroundPermission())) {
+        await new Promise<void>(resolve => {
+          showAlert(
+            'Always-on Location',
+            'Allow "all the time" so family can locate you even when your phone is locked.',
+            [
+              { text: 'Not now', style: 'cancel', onPress: () => resolve() },
+              {
+                text: 'Continue',
+                style: 'default',
+                onPress: async () => {
+                  await LocationService.requestBackgroundPermission();
+                  resolve();
+                },
+              },
+            ],
+            { icon: 'info' },
+          );
+        });
+      }
 
       const ignoring = await BatteryOptimizationService.isIgnoring();
       if (ignoring) return;

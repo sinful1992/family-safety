@@ -9,46 +9,40 @@ class LocationService {
     if (Platform.OS === 'android') {
       const fine = await PermissionsAndroid.request(
         PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-        {
-          title: 'Location Permission',
-          message: 'Family Safety needs your location to respond to check-ins.',
-          buttonPositive: 'Allow',
-          buttonNegative: 'Deny',
-        },
       );
 
-      if (fine !== PermissionsAndroid.RESULTS.GRANTED) {
-        if (fine === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN) return 'blocked';
-        return 'denied';
-      }
-
-      // Foreground granted — on Android 10+, separately request background
-      // location so FCM-triggered captures still work when the app is killed
-      // or in doze. On Android 11+ this opens Settings for the user to choose
-      // "Allow all the time". Best-effort — foreground alone is usually enough.
-      if ((Platform.Version as number) >= 29) {
-        try {
-          await PermissionsAndroid.request(
-            'android.permission.ACCESS_BACKGROUND_LOCATION' as never,
-            {
-              title: 'Always-on Location',
-              message: 'Allow "all the time" so family can locate you even when your phone is locked.',
-              buttonPositive: 'Continue',
-              buttonNegative: 'Not now',
-            },
-          );
-        } catch {
-          // Ignore — fine location is still granted.
-        }
-      }
-
-      return 'granted';
+      if (fine === PermissionsAndroid.RESULTS.GRANTED) return 'granted';
+      if (fine === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN) return 'blocked';
+      return 'denied';
     }
 
     const auth = await Geolocation.requestAuthorization('whenInUse');
     if (auth === 'granted') return 'granted';
     if (auth === 'disabled' || auth === 'restricted') return 'blocked';
     return 'denied';
+  }
+
+  async requestBackgroundPermission(): Promise<void> {
+    if (Platform.OS !== 'android') return;
+    if ((Platform.Version as number) < 29) return;
+    try {
+      await PermissionsAndroid.request(
+        'android.permission.ACCESS_BACKGROUND_LOCATION' as never,
+      );
+    } catch {
+      // Best-effort — foreground alone is usually enough.
+    }
+  }
+
+  async hasForegroundPermission(): Promise<boolean> {
+    if (Platform.OS !== 'android') return false;
+    return PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION);
+  }
+
+  async hasBackgroundPermission(): Promise<boolean> {
+    if (Platform.OS !== 'android') return false;
+    if ((Platform.Version as number) < 29) return true;
+    return PermissionsAndroid.check('android.permission.ACCESS_BACKGROUND_LOCATION' as never);
   }
 
   async getCurrentPosition(): Promise<Location> {
