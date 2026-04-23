@@ -15,11 +15,9 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import { MemberStatus, User, CheckInStatus } from '../../types';
 import FamilyMemberService from '../../services/FamilyMemberService';
 import CheckInService from '../../services/CheckInService';
-import BatteryOptimizationService from '../../services/BatteryOptimizationService';
 import BeaconCard from '../../components/BeaconCard';
 import FamilyPulse from '../../components/FamilyPulse';
 import NeedHelpSheet from '../../components/NeedHelpSheet';
-import { useAlert } from '../../contexts/AlertContext';
 import { COLORS, TYPOGRAPHY, SPACING } from '../../styles/theme';
 
 function greeting(name: string | null | undefined): string {
@@ -40,7 +38,6 @@ interface HomeScreenProps {
 
 const HomeScreen: React.FC<HomeScreenProps> = ({ user, previewMembers }) => {
   const navigation = useNavigation();
-  const { showAlert } = useAlert();
   const [members, setMembers] = useState<MemberStatus[]>(previewMembers ?? []);
   const [loading, setLoading] = useState(!previewMembers);
   const [refreshing, setRefreshing] = useState(false);
@@ -67,29 +64,6 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ user, previewMembers }) => {
     startListening();
     return () => { unsubscribeRef.current?.(); };
   }, [startListening]);
-
-  const hasOnboardedRef = useRef(false);
-  useEffect(() => {
-    if (hasOnboardedRef.current || previewMembers) return;
-    hasOnboardedRef.current = true;
-    (async () => {
-      const ignoring = await BatteryOptimizationService.isIgnoring();
-      if (ignoring) return;
-      showAlert(
-        'Never miss a check-in',
-        'Android may delay notifications to save battery. Allow Family Safety to ignore battery optimisations so pings arrive immediately.',
-        [
-          { text: 'Not now', style: 'cancel' },
-          {
-            text: 'Continue',
-            style: 'default',
-            onPress: () => { BatteryOptimizationService.requestIgnore(); },
-          },
-        ],
-        { icon: 'info' },
-      );
-    })();
-  }, [previewMembers, showAlert]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);

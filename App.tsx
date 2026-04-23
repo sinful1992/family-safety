@@ -1,6 +1,6 @@
 import 'react-native-get-random-values';
 import 'react-native-url-polyfill/auto';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { StatusBar } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { NavigationContainer, DefaultTheme, NavigationContainerRef } from '@react-navigation/native';
@@ -13,7 +13,8 @@ import SplashScreen from 'react-native-splash-screen';
 import AuthenticationModule from './src/services/AuthenticationModule';
 import NotificationManager from './src/services/NotificationManager';
 import LocationService from './src/services/LocationService';
-import { AlertProvider } from './src/contexts/AlertContext';
+import BatteryOptimizationService from './src/services/BatteryOptimizationService';
+import { AlertProvider, useAlert } from './src/contexts/AlertContext';
 import { User, MemberStatus } from './src/types';
 import { COLORS } from './src/styles/theme';
 
@@ -145,6 +146,44 @@ function RootNavigator({ user }: { user: User | null }) {
   );
 }
 
+function PermissionOnboarding({ user }: { user: User | null }) {
+  const { showAlert } = useAlert();
+  const lastKeyRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!user?.uid || !user.familyGroupId) return;
+    const key = `${user.uid}:${user.familyGroupId}`;
+    if (lastKeyRef.current === key) return;
+    lastKeyRef.current = key;
+
+    const uid = user.uid;
+    const groupId = user.familyGroupId;
+    (async () => {
+      NotificationManager.initializeListeners();
+      await NotificationManager.registerToken(uid, groupId);
+      await LocationService.requestPermission().catch(() => {});
+
+      const ignoring = await BatteryOptimizationService.isIgnoring();
+      if (ignoring) return;
+      showAlert(
+        'Never miss a check-in',
+        'Android may delay notifications to save battery. Allow Family Safety to ignore battery optimisations so pings arrive immediately.',
+        [
+          { text: 'Not now', style: 'cancel' },
+          {
+            text: 'Continue',
+            style: 'default',
+            onPress: () => { BatteryOptimizationService.requestIgnore(); },
+          },
+        ],
+        { icon: 'info' },
+      );
+    })();
+  }, [user?.uid, user?.familyGroupId, showAlert]);
+
+  return null;
+}
+
 export default function App() {
   const [user, setUser] = useState<User | null | undefined>(undefined);
 
@@ -167,17 +206,6 @@ export default function App() {
     return unsubscribe;
   }, []);
 
-  useEffect(() => {
-    if (!user?.uid || !user.familyGroupId) return;
-    const uid = user.uid;
-    const groupId = user.familyGroupId;
-    (async () => {
-      NotificationManager.initializeListeners();
-      await NotificationManager.registerToken(uid, groupId);
-      await LocationService.requestPermission().catch(() => {});
-    })();
-  }, [user?.uid, user?.familyGroupId]);
-
   // Show nothing while loading auth state
   if (user === undefined) return null;
 
@@ -185,6 +213,7 @@ export default function App() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <AlertProvider>
+          <PermissionOnboarding user={user} />
           <NavigationContainer theme={DarkTheme} ref={navigationRef}>
             <StatusBar barStyle="light-content" backgroundColor={COLORS.background.primary} />
             <RootNavigator user={user} />
