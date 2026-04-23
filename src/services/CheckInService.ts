@@ -74,17 +74,19 @@ class CheckInService {
     responderName: string,
     groupId: string,
     response: 'okay' | 'need_help',
-    location: Location,
+    location: Location | null,
   ): Promise<void> {
     const now = Date.now();
 
     const updates: { [key: string]: any } = {};
     updates[`/checkIns/${checkInId}/response`] = response;
     updates[`/checkIns/${checkInId}/respondedAt`] = now;
-    updates[`/checkIns/${checkInId}/location`] = location;
-    updates[`/familyGroups/${groupId}/memberStatus/${responderId}/location`] = location;
     updates[`/familyGroups/${groupId}/memberStatus/${responderId}/checkIn/status`] = response;
     updates[`/familyGroups/${groupId}/memberStatus/${responderId}/checkIn/respondedAt`] = now;
+    if (location) {
+      updates[`/checkIns/${checkInId}/location`] = location;
+      updates[`/familyGroups/${groupId}/memberStatus/${responderId}/location`] = location;
+    }
 
     await database().ref().update(updates);
 

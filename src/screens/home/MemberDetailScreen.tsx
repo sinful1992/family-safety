@@ -35,6 +35,8 @@ const STATUS_LABEL: Record<CheckInStatus, string> = {
   idle:      'Unknown',
 };
 
+const PENDING_TIMEOUT_MS = 30_000;
+
 function getInitials(name: string | null | undefined): string {
   if (!name) return '?';
   return name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
@@ -59,11 +61,12 @@ function getDirections(lat: number, lng: number) {
   });
 }
 
-function activityRows(status: CheckInStatus, checkIn?: CheckIn, location?: Location) {
+function activityRows(status: CheckInStatus, checkIn?: CheckIn, location?: Location, timedOut?: boolean) {
   const primaryText =
-    status === 'need_help' ? 'Tapped "I need help"' :
-    status === 'okay'      ? 'Responded — okay' :
-    status === 'pending'   ? 'Check-in sent' :
+    status === 'need_help'   ? 'Tapped "I need help"' :
+    status === 'okay'        ? 'Responded — okay' :
+    timedOut                 ? 'No response after 30s' :
+    status === 'pending'     ? 'Check-in sent' :
     'No recent response';
 
   const primaryTime = checkIn?.respondedAt ?? checkIn?.requestedAt;
@@ -104,7 +107,14 @@ const MemberDetailScreen: React.FC = () => {
   const pingDotAnim = useRef(new Animated.Value(1)).current;
 
   const isSelf = member.uid === currentUser.uid;
-  const status = (liveStatus.checkIn?.status as CheckInStatus) ?? 'idle';
+  const rawStatus = (liveStatus.checkIn?.status as CheckInStatus) ?? 'idle';
+  const [now, setNow] = useState(Date.now());
+  const isTimedOut =
+    rawStatus === 'pending' &&
+    !!liveStatus.checkIn?.requestedAt &&
+    now - liveStatus.checkIn.requestedAt > PENDING_TIMEOUT_MS;
+  const status: CheckInStatus = isTimedOut ? 'idle' : rawStatus;
+  const statusLabel = isTimedOut ? 'No response' : STATUS_LABEL[status];
   const statusColor = STATUS_COLOR[status];
   const pulse = status === 'pending' || status === 'need_help';
   const hasLocation = !!(liveStatus.location?.lat && liveStatus.location?.lng);
@@ -129,6 +139,18 @@ const MemberDetailScreen: React.FC = () => {
     loop.start();
     return () => loop.stop();
   }, [pulse, pingDotAnim]);
+
+  // Flip to "No response" once PENDING_TIMEOUT_MS elapses since requestedAt.
+  useEffect(() => {
+    if (rawStatus !== 'pending' || !liveStatus.checkIn?.requestedAt) return;
+    const remaining = liveStatus.checkIn.requestedAt + PENDING_TIMEOUT_MS - Date.now();
+    if (remaining <= 0) {
+      setNow(Date.now());
+      return;
+    }
+    const timer = setTimeout(() => setNow(Date.now()), remaining);
+    return () => clearTimeout(timer);
+  }, [rawStatus, liveStatus.checkIn?.requestedAt]);
 
   useEffect(() => {
     const groupId = currentUser.familyGroupId!;
@@ -185,7 +207,7 @@ const MemberDetailScreen: React.FC = () => {
     }
   };
 
-  const rows = activityRows(status, liveStatus.checkIn, liveStatus.location);
+  const rows = activityRows(status, liveStatus.checkIn, liveStatus.location, isTimedOut);
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -227,7 +249,7 @@ const MemberDetailScreen: React.FC = () => {
 
           <View style={[styles.statusPill, { backgroundColor: `${statusColor}1A`, borderColor: `${statusColor}48` }]}>
             <View style={[styles.statusPillDot, { backgroundColor: statusColor }]} />
-            <Text style={[styles.statusPillText, { color: statusColor }]}>{STATUS_LABEL[status]}</Text>
+            <Text style={[styles.statusPillText, { color: statusColor }]}>{statusLabel}</Text>
           </View>
         </View>
 
@@ -314,7 +336,9 @@ const MemberDetailScreen: React.FC = () => {
                 {repinging
                   ? <ActivityIndicator color="#fff" />
                   : <Text style={styles.pingBtnText}>
-                      {status === 'need_help' ? 'Call now' : 'Ping — Are you okay?'}
+                      {status === 'need_help' ? 'Call now' :
+                       isTimedOut            ? 'Try again' :
+                       'Ping — Are you okay?'}
                     </Text>
                 }
               </LinearGradient>

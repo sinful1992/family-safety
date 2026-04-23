@@ -59,6 +59,7 @@ messaging().setBackgroundMessageHandler(async remoteMessage => {
   }
 
   await notifee.displayNotification({
+    id: data.check_in_id,
     title: data.title,
     body: data.body,
     data: { checkInId: data.check_in_id, groupId: data.group_id, type: data.type },

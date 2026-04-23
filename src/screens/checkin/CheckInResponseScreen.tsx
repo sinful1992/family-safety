@@ -12,6 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import LinearGradient from 'react-native-linear-gradient';
+import notifee from '@notifee/react-native';
 import CheckInService from '../../services/CheckInService';
 import LocationService from '../../services/LocationService';
 import { useAlert } from '../../contexts/AlertContext';
@@ -55,7 +56,7 @@ const CheckInResponseScreen: React.FC<CheckInResponseScreenProps> = ({ user }) =
   const handleRespond = async (response: 'okay' | 'need_help') => {
     setResponding(response);
     try {
-      const location = await LocationService.getCurrentPosition();
+      const location = await LocationService.getCurrentPosition().catch(() => null);
       await CheckInService.respondToCheckIn(
         checkInId,
         user.uid,
@@ -64,6 +65,8 @@ const CheckInResponseScreen: React.FC<CheckInResponseScreenProps> = ({ user }) =
         response,
         location,
       );
+
+      notifee.cancelNotification(checkInId).catch(() => {});
 
       showAlert(
         response === 'okay' ? 'Response sent!' : 'Help is on the way',
@@ -76,7 +79,7 @@ const CheckInResponseScreen: React.FC<CheckInResponseScreenProps> = ({ user }) =
     } catch (error: unknown) {
       showAlert(
         'Could not send response',
-        error instanceof Error ? error.message : 'Please check your location settings.',
+        error instanceof Error ? error.message : 'Something went wrong.',
         undefined,
         { icon: 'error' },
       );

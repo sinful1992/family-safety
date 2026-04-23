@@ -122,6 +122,7 @@ class NotificationManager {
         } catch { }
 
         await notifee.displayNotification({
+          id: data.check_in_id as string,
           title: data.title as string,
           body: data.body as string,
           data: { checkInId: data.check_in_id, groupId: data.group_id, type: data.type },
