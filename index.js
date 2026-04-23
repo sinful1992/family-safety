@@ -4,7 +4,7 @@ import { AppRegistry } from 'react-native';
 import messaging from '@react-native-firebase/messaging';
 import database from '@react-native-firebase/database';
 import Geolocation from 'react-native-geolocation-service';
-import notifee, { AndroidCategory, AndroidImportance, EventType } from '@notifee/react-native';
+import notifee, { AndroidCategory, AndroidImportance, AndroidVisibility, EventType } from '@notifee/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import EncryptedStorage from 'react-native-encrypted-storage';
 import {
@@ -15,14 +15,24 @@ import {
 import App from './App';
 import { name as appName } from './app.json';
 
-const CHANNEL_ID = 'family-safety';
+const CHANNEL_ALERTS = 'family-safety-alerts';
+const CHANNEL_INFO = 'family-safety-info';
 
-async function ensureChannel() {
-  await notifee.createChannel({
-    id: CHANNEL_ID,
-    name: 'Family Safety',
-    importance: AndroidImportance.HIGH,
-  });
+async function ensureChannels() {
+  await Promise.all([
+    notifee.createChannel({
+      id: CHANNEL_ALERTS,
+      name: 'Family Safety Alerts',
+      importance: AndroidImportance.HIGH,
+      visibility: AndroidVisibility.PUBLIC,
+    }),
+    notifee.createChannel({
+      id: CHANNEL_INFO,
+      name: 'Family Safety',
+      importance: AndroidImportance.DEFAULT,
+      visibility: AndroidVisibility.PRIVATE,
+    }),
+  ]);
 }
 
 async function captureAndWriteLocation(userId, familyGroupId) {
@@ -57,7 +67,7 @@ messaging().setBackgroundMessageHandler(async remoteMessage => {
   const data = remoteMessage.data;
   if (!data?.type) return;
 
-  await ensureChannel();
+  await ensureChannels();
 
   if (data.type === 'check_in_request') {
     // Show notification immediately — don't await GPS before displaying
@@ -67,8 +77,7 @@ messaging().setBackgroundMessageHandler(async remoteMessage => {
       body: data.body,
       data: { checkInId: data.check_in_id, groupId: data.group_id, type: data.type },
       android: {
-        channelId: CHANNEL_ID,
-        importance: AndroidImportance.HIGH,
+        channelId: CHANNEL_ALERTS,
         category: AndroidCategory.CALL,
         pressAction: { id: 'default', launchActivity: 'default' },
         fullScreenAction: { id: 'default', launchActivity: 'default' },
@@ -92,8 +101,7 @@ messaging().setBackgroundMessageHandler(async remoteMessage => {
       body: data.body,
       data: { checkInId: data.check_in_id, groupId: data.group_id, type: data.type },
       android: {
-        channelId: CHANNEL_ID,
-        importance: AndroidImportance.DEFAULT,
+        channelId: CHANNEL_INFO,
         pressAction: { id: 'default' },
       },
     });

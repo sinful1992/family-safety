@@ -3,14 +3,15 @@ import database from '@react-native-firebase/database';
 import { PermissionsAndroid, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import EncryptedStorage from 'react-native-encrypted-storage';
-import notifee, { AndroidCategory, AndroidImportance, EventType } from '@notifee/react-native';
+import notifee, { AndroidCategory, AndroidImportance, AndroidVisibility, EventType } from '@notifee/react-native';
 import supabase from './SupabaseClient';
 import LocationService from './LocationService';
 import { classifyLocationError, writeLocationError, clearLocationError } from '../utils/locationError';
 
 type NavigateToCheckIn = (checkInId: string, groupId: string) => void;
 
-const CHANNEL_ID = 'family-safety';
+const CHANNEL_ALERTS = 'family-safety-alerts';
+const CHANNEL_INFO = 'family-safety-info';
 
 class NotificationManager {
   private fcmToken: string | null = null;
@@ -78,12 +79,21 @@ class NotificationManager {
     }
   }
 
-  private async ensureChannel(): Promise<void> {
-    await notifee.createChannel({
-      id: CHANNEL_ID,
-      name: 'Family Safety',
-      importance: AndroidImportance.HIGH,
-    });
+  private async ensureChannels(): Promise<void> {
+    await Promise.all([
+      notifee.createChannel({
+        id: CHANNEL_ALERTS,
+        name: 'Family Safety Alerts',
+        importance: AndroidImportance.HIGH,
+        visibility: AndroidVisibility.PUBLIC,
+      }),
+      notifee.createChannel({
+        id: CHANNEL_INFO,
+        name: 'Family Safety',
+        importance: AndroidImportance.DEFAULT,
+        visibility: AndroidVisibility.PRIVATE,
+      }),
+    ]);
   }
 
   private navigate(checkInId: string, groupId: string, delay = 0): void {
@@ -104,7 +114,7 @@ class NotificationManager {
       const data = remoteMessage.data;
       if (!data?.type) return;
 
-      await this.ensureChannel();
+      await this.ensureChannels();
 
       if (data.type === 'check_in_request') {
         // Capture location immediately before showing UI
@@ -129,8 +139,7 @@ class NotificationManager {
           body: data.body as string,
           data: { checkInId: data.check_in_id, groupId: data.group_id, type: data.type },
           android: {
-            channelId: CHANNEL_ID,
-            importance: AndroidImportance.HIGH,
+            channelId: CHANNEL_ALERTS,
             category: AndroidCategory.CALL,
             pressAction: { id: 'default', launchActivity: 'default' },
             fullScreenAction: { id: 'default', launchActivity: 'default' },
@@ -142,15 +151,14 @@ class NotificationManager {
         await notifee.displayNotification({
           title: data.title as string,
           body: data.body as string,
-          android: { channelId: CHANNEL_ID, importance: AndroidImportance.DEFAULT },
+          android: { channelId: CHANNEL_INFO },
         });
       } else if (data.type === 'help_alert') {
         await notifee.displayNotification({
           title: data.title as string,
           body: data.body as string,
           android: {
-            channelId: CHANNEL_ID,
-            importance: AndroidImportance.HIGH,
+            channelId: CHANNEL_ALERTS,
             pressAction: { id: 'default' },
           },
         });
