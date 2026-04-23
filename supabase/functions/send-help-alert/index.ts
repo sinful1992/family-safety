@@ -72,12 +72,19 @@ async function getServiceAccountToken(sa: ServiceAccount): Promise<string> {
   return access_token;
 }
 
+interface FCMResult {
+  ok: boolean;
+  status: number;
+  body: string;
+  unregistered: boolean;
+}
+
 async function sendFCM(
   fcmToken: string,
   projectId: string,
   data: Record<string, string>,
   accessToken: string,
-): Promise<void> {
+): Promise<FCMResult> {
   const res = await fetch(
     `https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`,
     {
@@ -99,10 +106,13 @@ async function sendFCM(
       }),
     },
   );
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`FCM V1 error ${res.status}: ${body}`);
-  }
+  const body = res.ok ? '' : await res.text();
+  return {
+    ok: res.ok,
+    status: res.status,
+    body,
+    unregistered: res.status === 404 && body.includes('UNREGISTERED'),
+  };
 }
 
 serve(async (req) => {
@@ -146,7 +156,7 @@ serve(async (req) => {
         const fcmToken: string | null = await tokenRes.json();
         if (!fcmToken) return;
 
-        await sendFCM(
+        const result = await sendFCM(
           fcmToken,
           sa.project_id,
           {
@@ -159,6 +169,17 @@ serve(async (req) => {
           },
           accessToken,
         );
+
+        if (!result.ok) {
+          if (result.unregistered) {
+            await fetch(
+              `${dbUrl}/users/${uid}/fcmToken.json?access_token=${accessToken}`,
+              { method: 'DELETE' },
+            );
+            return;
+          }
+          throw new Error(`FCM V1 error ${result.status}: ${result.body}`);
+        }
       }),
     );
 

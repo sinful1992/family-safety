@@ -13,7 +13,6 @@ const CHANNEL_ID = 'family-safety';
 
 class NotificationManager {
   private fcmToken: string | null = null;
-  private readonly FCM_TOKEN_KEY = '@fcm_token';
   private navigateToCheckIn: NavigateToCheckIn | null = null;
   private listenersInitialized = false;
 
@@ -42,28 +41,11 @@ class NotificationManager {
 
   async getFCMToken(): Promise<string | null> {
     try {
-      if (this.fcmToken) return this.fcmToken;
-
-      const stored = await EncryptedStorage.getItem(this.FCM_TOKEN_KEY);
-      if (stored) {
-        this.fcmToken = stored;
-        return stored;
-      }
-
-      const legacy = await AsyncStorage.getItem(this.FCM_TOKEN_KEY);
-      if (legacy) {
-        await EncryptedStorage.setItem(this.FCM_TOKEN_KEY, legacy);
-        await AsyncStorage.removeItem(this.FCM_TOKEN_KEY);
-        this.fcmToken = legacy;
-        return legacy;
-      }
-
       const hasPermission = await this.requestPermissions();
       if (!hasPermission) return null;
 
       const token = await messaging().getToken();
       this.fcmToken = token;
-      await EncryptedStorage.setItem(this.FCM_TOKEN_KEY, token);
       return token;
     } catch {
       return null;
@@ -75,7 +57,11 @@ class NotificationManager {
       const token = await this.getFCMToken();
       if (!token) return;
 
-      await database().ref(`/users/${userId}/fcmToken`).set(token);
+      const ref = database().ref(`/users/${userId}/fcmToken`);
+      const snap = await ref.once('value');
+      if (snap.val() !== token) {
+        await ref.set(token);
+      }
 
       const { error } = await supabase.functions.invoke('register-device-token', {
         body: { user_id: userId, family_group_id: familyGroupId, fcm_token: token, platform: Platform.OS },
@@ -195,7 +181,6 @@ class NotificationManager {
     // FCM token refresh
     messaging().onTokenRefresh(async token => {
       this.fcmToken = token;
-      await EncryptedStorage.setItem(this.FCM_TOKEN_KEY, token);
       try {
         const tokenData = await EncryptedStorage.getItem('@fcm_token_data');
         if (tokenData) {
@@ -209,7 +194,6 @@ class NotificationManager {
   async clearToken(): Promise<void> {
     try {
       await messaging().deleteToken();
-      await EncryptedStorage.removeItem(this.FCM_TOKEN_KEY);
       await EncryptedStorage.removeItem('@fcm_token_data');
       this.fcmToken = null;
     } catch { }
