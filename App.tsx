@@ -168,11 +168,14 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (user?.uid && user.familyGroupId) {
-      NotificationManager.registerToken(user.uid, user.familyGroupId);
+    if (!user?.uid || !user.familyGroupId) return;
+    const uid = user.uid;
+    const groupId = user.familyGroupId;
+    (async () => {
       NotificationManager.initializeListeners();
-      LocationService.requestPermission().catch(() => {});
-    }
+      await NotificationManager.registerToken(uid, groupId);
+      await LocationService.requestPermission().catch(() => {});
+    })();
   }, [user?.uid, user?.familyGroupId]);
 
   // Show nothing while loading auth state

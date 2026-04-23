@@ -8,8 +8,6 @@ import {
   ActivityIndicator,
   RefreshControl,
   TouchableOpacity,
-  PermissionsAndroid,
-  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -17,7 +15,6 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import { MemberStatus, User, CheckInStatus } from '../../types';
 import FamilyMemberService from '../../services/FamilyMemberService';
 import CheckInService from '../../services/CheckInService';
-import LocationService from '../../services/LocationService';
 import BatteryOptimizationService from '../../services/BatteryOptimizationService';
 import BeaconCard from '../../components/BeaconCard';
 import FamilyPulse from '../../components/FamilyPulse';
@@ -76,15 +73,6 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ user, previewMembers }) => {
     if (hasOnboardedRef.current || previewMembers) return;
     hasOnboardedRef.current = true;
     (async () => {
-      if (Platform.OS === 'android') {
-        const granted = await PermissionsAndroid.check(
-          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-        );
-        if (!granted) await LocationService.requestPermission();
-      } else {
-        await LocationService.requestPermission();
-      }
-
       const ignoring = await BatteryOptimizationService.isIgnoring();
       if (ignoring) return;
       showAlert(
