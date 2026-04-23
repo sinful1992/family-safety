@@ -4,6 +4,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { MemberStatus, CheckInStatus } from '../types';
 import StatusRing from './StatusRing';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../styles/theme';
+import { deriveDisplayStatus, usePendingTimeout } from '../utils/checkInStatus';
 
 const AVATAR_SIZE = 42;
 const RING_SIZE = AVATAR_SIZE + 14;
@@ -20,10 +21,6 @@ function getInitials(name: string | null | undefined): string {
   return name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
 }
 
-function getCheckInStatus(member: MemberStatus): CheckInStatus {
-  return (member.checkIn?.status as CheckInStatus) ?? 'idle';
-}
-
 interface BeaconCardProps {
   member: MemberStatus;
   onPress: () => void;
@@ -31,7 +28,9 @@ interface BeaconCardProps {
 }
 
 const BeaconCard: React.FC<BeaconCardProps> = ({ member, onPress, isSelf }) => {
-  const status = getCheckInStatus(member);
+  const now = usePendingTimeout(member.checkIn);
+  const { status, timedOut } = deriveDisplayStatus(member.checkIn, now);
+  const statusLabel = timedOut ? 'No response' : STATUS_LABEL[status];
 
   const color =
     status === 'okay'      ? COLORS.status.okay :
@@ -82,7 +81,7 @@ const BeaconCard: React.FC<BeaconCardProps> = ({ member, onPress, isSelf }) => {
       <View style={styles.bottomRow}>
         <View style={styles.statusBadge}>
           <View style={[styles.statusDot, { backgroundColor: color }]} />
-          <Text style={[styles.statusText, { color }]}>{STATUS_LABEL[status]}</Text>
+          <Text style={[styles.statusText, { color }]}>{statusLabel}</Text>
         </View>
         {lastSeen && <Text style={styles.lastSeen}>{lastSeen}</Text>}
       </View>

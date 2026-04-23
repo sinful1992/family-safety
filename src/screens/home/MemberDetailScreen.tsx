@@ -20,6 +20,7 @@ import { MemberStatus, User, CheckInStatus, Location, CheckIn } from '../../type
 import CheckInService from '../../services/CheckInService';
 import { useAlert } from '../../contexts/AlertContext';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../../styles/theme';
+import { deriveDisplayStatus, usePendingTimeout } from '../../utils/checkInStatus';
 
 const STATUS_COLOR: Record<CheckInStatus, string> = {
   okay:      COLORS.status.okay,
@@ -34,8 +35,6 @@ const STATUS_LABEL: Record<CheckInStatus, string> = {
   need_help: 'Needs help',
   idle:      'Unknown',
 };
-
-const PENDING_TIMEOUT_MS = 30_000;
 
 function getInitials(name: string | null | undefined): string {
   if (!name) return '?';
@@ -103,17 +102,11 @@ const MemberDetailScreen: React.FC = () => {
   });
   const [repinging, setRepinging] = useState(false);
   const [pinged, setPinged] = useState(false);
-  const hasPingedRef = useRef(false);
   const pingDotAnim = useRef(new Animated.Value(1)).current;
 
   const isSelf = member.uid === currentUser.uid;
-  const rawStatus = (liveStatus.checkIn?.status as CheckInStatus) ?? 'idle';
-  const [now, setNow] = useState(Date.now());
-  const isTimedOut =
-    rawStatus === 'pending' &&
-    !!liveStatus.checkIn?.requestedAt &&
-    now - liveStatus.checkIn.requestedAt > PENDING_TIMEOUT_MS;
-  const status: CheckInStatus = isTimedOut ? 'idle' : rawStatus;
+  const now = usePendingTimeout(liveStatus.checkIn);
+  const { status, timedOut: isTimedOut } = deriveDisplayStatus(liveStatus.checkIn, now);
   const statusLabel = isTimedOut ? 'No response' : STATUS_LABEL[status];
   const statusColor = STATUS_COLOR[status];
   const pulse = status === 'pending' || status === 'need_help';
@@ -140,18 +133,6 @@ const MemberDetailScreen: React.FC = () => {
     return () => loop.stop();
   }, [pulse, pingDotAnim]);
 
-  // Flip to "No response" once PENDING_TIMEOUT_MS elapses since requestedAt.
-  useEffect(() => {
-    if (rawStatus !== 'pending' || !liveStatus.checkIn?.requestedAt) return;
-    const remaining = liveStatus.checkIn.requestedAt + PENDING_TIMEOUT_MS - Date.now();
-    if (remaining <= 0) {
-      setNow(Date.now());
-      return;
-    }
-    const timer = setTimeout(() => setNow(Date.now()), remaining);
-    return () => clearTimeout(timer);
-  }, [rawStatus, liveStatus.checkIn?.requestedAt]);
-
   useEffect(() => {
     const groupId = currentUser.familyGroupId!;
     const ref = database().ref(`/familyGroups/${groupId}/memberStatus/${member.uid}`);
@@ -161,25 +142,6 @@ const MemberDetailScreen: React.FC = () => {
     };
     ref.on('value', handler);
     return () => ref.off('value', handler);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    if (isSelf || hasPingedRef.current || status === 'pending') return;
-    hasPingedRef.current = true;
-    CheckInService.sendCheckInRequest(
-      currentUser.uid,
-      currentUser.displayName ?? 'Someone',
-      member.uid,
-      member.displayName ?? 'your family member',
-      currentUser.familyGroupId!,
-    ).catch((error: unknown) => {
-      showAlert(
-        'Failed to send ping',
-        error instanceof Error ? error.message : 'Something went wrong.',
-        undefined,
-        { icon: 'error' },
-      );
-    });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handlePing = async () => {

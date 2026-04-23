@@ -8,6 +8,8 @@ import {
   ActivityIndicator,
   RefreshControl,
   TouchableOpacity,
+  PermissionsAndroid,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -15,6 +17,7 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import { MemberStatus, User, CheckInStatus } from '../../types';
 import FamilyMemberService from '../../services/FamilyMemberService';
 import CheckInService from '../../services/CheckInService';
+import LocationService from '../../services/LocationService';
 import BeaconCard from '../../components/BeaconCard';
 import FamilyPulse from '../../components/FamilyPulse';
 import NeedHelpSheet from '../../components/NeedHelpSheet';
@@ -64,6 +67,21 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ user, previewMembers }) => {
     startListening();
     return () => { unsubscribeRef.current?.(); };
   }, [startListening]);
+
+  const hasAskedLocationRef = useRef(false);
+  useEffect(() => {
+    if (hasAskedLocationRef.current || previewMembers) return;
+    hasAskedLocationRef.current = true;
+    (async () => {
+      if (Platform.OS === 'android') {
+        const granted = await PermissionsAndroid.check(
+          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+        );
+        if (granted) return;
+      }
+      await LocationService.requestPermission();
+    })();
+  }, [previewMembers]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
