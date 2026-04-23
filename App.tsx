@@ -210,24 +210,8 @@ function PermissionOnboarding({ user }: { user: User | null }) {
         BatteryOptimizationService.canUseFullScreenIntent(),
       ]);
 
-      if (!ignoring) {
-        showAlert(
-          'Never miss a check-in',
-          'Android may delay notifications to save battery. Allow Family Safety to ignore battery optimisations so pings arrive immediately.',
-          [
-            { text: 'Not now', style: 'cancel' },
-            {
-              text: 'Continue',
-              style: 'default',
-              onPress: () => { BatteryOptimizationService.requestIgnore(); },
-            },
-          ],
-          { icon: 'info' },
-        );
-        return;
-      }
-
-      if (!canFullScreen) {
+      const promptFullScreen = () => {
+        if (canFullScreen) return;
         showAlert(
           'Full-Screen Alerts',
           'Allow Family Safety to show check-in requests over the lock screen so you never miss a ping.',
@@ -241,7 +225,26 @@ function PermissionOnboarding({ user }: { user: User | null }) {
           ],
           { icon: 'info' },
         );
+      };
+
+      if (!ignoring) {
+        showAlert(
+          'Never miss a check-in',
+          'Android may delay notifications to save battery. Allow Family Safety to ignore battery optimisations so pings arrive immediately.',
+          [
+            { text: 'Not now', style: 'cancel', onPress: promptFullScreen },
+            {
+              text: 'Continue',
+              style: 'default',
+              onPress: () => { BatteryOptimizationService.requestIgnore(); promptFullScreen(); },
+            },
+          ],
+          { icon: 'info' },
+        );
+        return;
       }
+
+      promptFullScreen();
     })();
   }, [user?.uid, user?.familyGroupId, showAlert]);
 
