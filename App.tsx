@@ -205,7 +205,11 @@ function PermissionOnboarding({ user }: { user: User | null }) {
         });
       }
 
-      const ignoring = await BatteryOptimizationService.isIgnoring();
+      const [ignoring, canFullScreen] = await Promise.all([
+        BatteryOptimizationService.isIgnoring(),
+        BatteryOptimizationService.canUseFullScreenIntent(),
+      ]);
+
       if (!ignoring) {
         showAlert(
           'Never miss a check-in',
@@ -223,7 +227,6 @@ function PermissionOnboarding({ user }: { user: User | null }) {
         return;
       }
 
-      const canFullScreen = await BatteryOptimizationService.canUseFullScreenIntent();
       if (!canFullScreen) {
         showAlert(
           'Full-Screen Alerts',
