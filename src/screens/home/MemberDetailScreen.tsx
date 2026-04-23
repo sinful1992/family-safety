@@ -9,7 +9,6 @@ import {
   ScrollView,
   Linking,
   Animated,
-  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -17,6 +16,7 @@ import { formatDistanceToNow, format } from 'date-fns';
 import LinearGradient from 'react-native-linear-gradient';
 import Icon from 'react-native-vector-icons/Ionicons';
 import database from '@react-native-firebase/database';
+import { Map, Camera, Marker } from '@maplibre/maplibre-react-native';
 import { MemberStatus, User, CheckInStatus, Location, CheckIn, LocationError } from '../../types';
 import CheckInService from '../../services/CheckInService';
 import { useAlert } from '../../contexts/AlertContext';
@@ -49,10 +49,6 @@ function formatCoord(lat: number, lng: number): string {
   const latStr = `${Math.abs(lat).toFixed(4)}°${lat >= 0 ? 'N' : 'S'}`;
   const lngStr = `${Math.abs(lng).toFixed(4)}°${lng >= 0 ? 'E' : 'W'}`;
   return `${latStr}, ${lngStr}`;
-}
-
-function staticMapUrl(lat: number, lng: number): string {
-  return `https://maps.wikimedia.org/img/osm-intl,15,${lat},${lng},600x280.png`;
 }
 
 function openInMaps(lat: number, lng: number, label: string) {
@@ -259,18 +255,34 @@ const MemberDetailScreen: React.FC = () => {
           <View style={styles.mapPlaceholder}>
             {hasLocation ? (
               <>
-                <Image
-                  source={{ uri: staticMapUrl(liveStatus.location!.lat, liveStatus.location!.lng) }}
-                  style={styles.mapImage}
-                  resizeMode="cover"
-                />
-                <View style={[styles.mapDot, { backgroundColor: statusColor }]} />
+                <Map
+                  style={styles.mapView}
+                  mapStyle="https://tiles.openfreemap.org/styles/liberty"
+                  attribution={false}
+                  logo={false}
+                  compass={false}
+                  scaleBar={false}
+                  dragPan={false}
+                  touchZoom={false}
+                  doubleTapZoom={false}
+                  doubleTapHoldZoom={false}
+                  touchRotate={false}
+                  touchPitch={false}
+                >
+                  <Camera
+                    center={[liveStatus.location!.lng, liveStatus.location!.lat]}
+                    zoom={15}
+                  />
+                  <Marker lngLat={[liveStatus.location!.lng, liveStatus.location!.lat]}>
+                    <View style={[styles.mapMarker, { backgroundColor: statusColor }]} />
+                  </Marker>
+                </Map>
                 <TouchableOpacity
                   style={styles.mapAttributionWrap}
                   onPress={() => Linking.openURL('https://www.openstreetmap.org/copyright').catch(() => {})}
                   activeOpacity={0.7}
                 >
-                  <Text style={styles.mapAttribution}>© OpenStreetMap</Text>
+                  <Text style={styles.mapAttribution}>© OpenStreetMap · OpenFreeMap</Text>
                 </TouchableOpacity>
               </>
             ) : (
@@ -499,25 +511,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     overflow: 'hidden',
   },
-  mapImage: {
-    ...StyleSheet.absoluteFillObject,
-    width: '100%',
-    height: '100%',
+  mapView: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
   mapComment: {
     fontFamily: 'monospace',
     fontSize: TYPOGRAPHY.fontSize.xs,
     color: COLORS.text.dim,
   },
-  mapDot: {
-    position: 'absolute',
+  mapMarker: {
     width: 14,
     height: 14,
     borderRadius: 7,
-    top: '50%',
-    left: '50%',
-    marginTop: -7,
-    marginLeft: -7,
     borderWidth: 2.5,
     borderColor: COLORS.background.primary,
   },
