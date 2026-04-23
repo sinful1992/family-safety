@@ -1,6 +1,7 @@
 package com.familysafety;
 
 import android.app.Activity;
+import android.os.Build;
 import android.view.WindowManager;
 
 import com.facebook.react.bridge.Promise;
@@ -30,8 +31,26 @@ public class ScreenWakeModule extends ReactContextBaseJavaModule {
             try {
                 if (keep) {
                     activity.getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                        activity.setShowWhenLocked(true);
+                        activity.setTurnScreenOn(true);
+                    } else {
+                        activity.getWindow().addFlags(
+                            WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED |
+                            WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+                        );
+                    }
                 } else {
                     activity.getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                        activity.setShowWhenLocked(false);
+                        activity.setTurnScreenOn(false);
+                    } else {
+                        activity.getWindow().clearFlags(
+                            WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED |
+                            WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+                        );
+                    }
                 }
                 promise.resolve(null);
             } catch (Exception e) {
