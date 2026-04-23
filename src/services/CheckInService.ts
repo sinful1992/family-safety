@@ -48,8 +48,13 @@ class CheckInService {
       if (error) {
         let reason = error.message;
         try {
-          const body = await (error as any).context?.json?.();
-          if (body?.error) reason = body.error;
+          const ctx = (error as any).context;
+          if (ctx instanceof Error) {
+            reason = `${error.message}: ${ctx.message}`;
+          } else if (ctx?.json) {
+            const body = await ctx.json();
+            if (body?.error) reason = body.error;
+          }
         } catch {}
         throw new Error(reason);
       }

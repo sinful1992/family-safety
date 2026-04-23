@@ -36,7 +36,7 @@ async function getServiceAccountToken(sa: ServiceAccount): Promise<string> {
   const now = Math.floor(Date.now() / 1000);
   const sigInput = `${b64url({ alg: 'RS256', typ: 'JWT' })}.${b64url({
     iss: sa.client_email,
-    scope: 'https://www.googleapis.com/auth/firebase.messaging https://www.googleapis.com/auth/firebase',
+    scope: 'https://www.googleapis.com/auth/firebase.messaging https://www.googleapis.com/auth/firebase.database https://www.googleapis.com/auth/userinfo.email',
     aud: 'https://oauth2.googleapis.com/token',
     iat: now,
     exp: now + 3600,
@@ -113,7 +113,12 @@ serve(async (req) => {
   try {
     const { sender_user_id, sender_name, group_id } = await req.json();
 
-    const sa: ServiceAccount = JSON.parse(Deno.env.get('FIREBASE_SERVICE_ACCOUNT')!);
+    const saRaw = Deno.env.get('FIREBASE_SERVICE_ACCOUNT');
+    if (!saRaw) throw new Error('FIREBASE_SERVICE_ACCOUNT secret is not set');
+    const sa: ServiceAccount = JSON.parse(saRaw);
+    if (!sa.private_key) throw new Error('FIREBASE_SERVICE_ACCOUNT JSON is missing private_key field');
+    if (!sa.client_email) throw new Error('FIREBASE_SERVICE_ACCOUNT JSON is missing client_email field');
+    if (!sa.project_id) throw new Error('FIREBASE_SERVICE_ACCOUNT JSON is missing project_id field');
     const accessToken = await getServiceAccountToken(sa);
     const dbUrl = Deno.env.get('FIREBASE_DATABASE_URL');
 
