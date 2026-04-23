@@ -3,10 +3,10 @@ import 'react-native-url-polyfill/auto';
 import { AppRegistry } from 'react-native';
 import messaging from '@react-native-firebase/messaging';
 import database from '@react-native-firebase/database';
-import auth from '@react-native-firebase/auth';
 import Geolocation from 'react-native-geolocation-service';
 import notifee, { AndroidCategory, AndroidImportance, EventType } from '@notifee/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import EncryptedStorage from 'react-native-encrypted-storage';
 import {
   classifyLocationError,
   writeLocationError,
@@ -47,7 +47,7 @@ async function captureAndWriteLocation(userId, familyGroupId) {
         await writeLocationError(familyGroupId, userId, classifyLocationError(err));
         resolve(null);
       },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 5000 },
     );
   });
 }
@@ -60,15 +60,7 @@ messaging().setBackgroundMessageHandler(async remoteMessage => {
   await ensureChannel();
 
   if (data.type === 'check_in_request') {
-    try {
-      const user = auth().currentUser;
-      if (user) {
-        const snap = await database().ref(`/users/${user.uid}/familyGroupId`).once('value');
-        const familyGroupId = snap.val();
-        if (familyGroupId) await captureAndWriteLocation(user.uid, familyGroupId);
-      }
-    } catch { }
-
+    // Show notification immediately — don't await GPS before displaying
     await notifee.displayNotification({
       id: data.check_in_id,
       title: data.title,
@@ -82,6 +74,17 @@ messaging().setBackgroundMessageHandler(async remoteMessage => {
         fullScreenAction: { id: 'default', launchActivity: 'default' },
       },
     });
+
+    // auth().currentUser is null in headless background context — use stored credentials instead
+    try {
+      const tokenData = await EncryptedStorage.getItem('@fcm_token_data');
+      if (tokenData) {
+        const { userId, familyGroupId } = JSON.parse(tokenData);
+        if (userId && familyGroupId) {
+          captureAndWriteLocation(userId, familyGroupId).catch(() => {});
+        }
+      }
+    } catch { }
   } else {
     await notifee.displayNotification({
       id: data.check_in_id,
