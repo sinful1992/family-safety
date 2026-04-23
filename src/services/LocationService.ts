@@ -7,7 +7,7 @@ type PermissionResult = 'granted' | 'denied' | 'blocked';
 class LocationService {
   async requestPermission(): Promise<PermissionResult> {
     if (Platform.OS === 'android') {
-      const result = await PermissionsAndroid.request(
+      const fine = await PermissionsAndroid.request(
         PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
         {
           title: 'Location Permission',
@@ -17,9 +17,32 @@ class LocationService {
         },
       );
 
-      if (result === PermissionsAndroid.RESULTS.GRANTED) return 'granted';
-      if (result === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN) return 'blocked';
-      return 'denied';
+      if (fine !== PermissionsAndroid.RESULTS.GRANTED) {
+        if (fine === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN) return 'blocked';
+        return 'denied';
+      }
+
+      // Foreground granted — on Android 10+, separately request background
+      // location so FCM-triggered captures still work when the app is killed
+      // or in doze. On Android 11+ this opens Settings for the user to choose
+      // "Allow all the time". Best-effort — foreground alone is usually enough.
+      if ((Platform.Version as number) >= 29) {
+        try {
+          await PermissionsAndroid.request(
+            'android.permission.ACCESS_BACKGROUND_LOCATION' as never,
+            {
+              title: 'Always-on Location',
+              message: 'Allow "all the time" so family can locate you even when your phone is locked.',
+              buttonPositive: 'Continue',
+              buttonNegative: 'Not now',
+            },
+          );
+        } catch {
+          // Ignore — fine location is still granted.
+        }
+      }
+
+      return 'granted';
     }
 
     const auth = await Geolocation.requestAuthorization('whenInUse');

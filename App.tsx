@@ -12,6 +12,7 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import SplashScreen from 'react-native-splash-screen';
 import AuthenticationModule from './src/services/AuthenticationModule';
 import NotificationManager from './src/services/NotificationManager';
+import LocationService from './src/services/LocationService';
 import { AlertProvider } from './src/contexts/AlertContext';
 import { User, MemberStatus } from './src/types';
 import { COLORS } from './src/styles/theme';
@@ -170,6 +171,7 @@ export default function App() {
     if (user?.uid && user.familyGroupId) {
       NotificationManager.registerToken(user.uid, user.familyGroupId);
       NotificationManager.initializeListeners();
+      LocationService.requestPermission().catch(() => {});
     }
   }, [user?.uid, user?.familyGroupId]);
 
