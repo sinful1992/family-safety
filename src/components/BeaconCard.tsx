@@ -14,6 +14,7 @@ const STATUS_LABEL: Record<CheckInStatus, string> = {
   pending:   'Pinging…',
   need_help: 'Needs help',
   idle:      'Unknown',
+  timed_out: 'No response',
 };
 
 function getInitials(name: string | null | undefined): string {

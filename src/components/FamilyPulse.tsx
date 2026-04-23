@@ -1,11 +1,32 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { MemberStatus, CheckInStatus } from '../types';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../styles/theme';
+import { deriveDisplayStatus, PENDING_TIMEOUT_MS } from '../utils/checkInStatus';
 
-function getMemberStatus(m: MemberStatus): CheckInStatus {
-  return (m.checkIn?.status as CheckInStatus) ?? 'idle';
+function useNowForPendingMembers(members: MemberStatus[]): number {
+  const [now, setNow] = useState(Date.now());
+
+  const earliestExpiry = members.reduce<number | null>((acc, m) => {
+    const ci = m.checkIn;
+    if (!ci || ci.status !== 'pending' || !ci.requestedAt) return acc;
+    const expiry = ci.requestedAt + PENDING_TIMEOUT_MS;
+    return acc === null || expiry < acc ? expiry : acc;
+  }, null);
+
+  useEffect(() => {
+    if (earliestExpiry === null) return;
+    const remaining = earliestExpiry - Date.now();
+    if (remaining <= 0) {
+      setNow(Date.now());
+      return;
+    }
+    const timer = setTimeout(() => setNow(Date.now()), remaining);
+    return () => clearTimeout(timer);
+  }, [earliestExpiry]);
+
+  return now;
 }
 
 function statusColor(s: CheckInStatus): string {
@@ -25,13 +46,15 @@ interface FamilyPulseProps {
 }
 
 const FamilyPulse: React.FC<FamilyPulseProps> = ({ members, pinging, onPingAll, onNeedHelp }) => {
+  const now = useNowForPendingMembers(members);
+
   const counts = members.reduce<Record<CheckInStatus, number>>(
     (acc, m) => {
-      const s = getMemberStatus(m);
-      acc[s] = (acc[s] ?? 0) + 1;
+      const { status } = deriveDisplayStatus(m.checkIn, now);
+      acc[status] = (acc[status] ?? 0) + 1;
       return acc;
     },
-    { okay: 0, pending: 0, need_help: 0, idle: 0 },
+    { okay: 0, pending: 0, need_help: 0, idle: 0, timed_out: 0 },
   );
 
   const { okay, pending, need_help: need, idle } = counts;

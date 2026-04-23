@@ -29,6 +29,7 @@ const STATUS_COLOR: Record<CheckInStatus, string> = {
   pending:   COLORS.status.pending,
   need_help: COLORS.status.needHelp,
   idle:      COLORS.status.unknown,
+  timed_out: COLORS.status.unknown,
 };
 
 const STATUS_LABEL: Record<CheckInStatus, string> = {
@@ -36,6 +37,7 @@ const STATUS_LABEL: Record<CheckInStatus, string> = {
   pending:   'Pinging…',
   need_help: 'Needs help',
   idle:      'Unknown',
+  timed_out: 'No response',
 };
 
 function getInitials(name: string | null | undefined): string {

@@ -8,6 +8,7 @@ const STATUS_COLORS: Record<CheckInStatus, string> = {
   pending: COLORS.status.pending,
   need_help: COLORS.status.needHelp,
   idle: COLORS.status.unknown,
+  timed_out: COLORS.status.unknown,
 };
 
 interface StatusRingProps {

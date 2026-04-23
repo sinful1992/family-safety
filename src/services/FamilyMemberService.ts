@@ -1,5 +1,9 @@
 import database from '@react-native-firebase/database';
 import { User, MemberStatus, Unsubscribe } from '../types';
+import { PENDING_TIMEOUT_MS } from '../utils/checkInStatus';
+import CheckInService from './CheckInService';
+
+const TIMEOUT_SWEEP_BUFFER_MS = 500;
 
 class FamilyMemberService {
   private listeners: Map<string, () => void> = new Map();
@@ -10,6 +14,33 @@ class FamilyMemberService {
   ): Unsubscribe {
     const members: Map<string, MemberStatus> = new Map();
     const memberListeners: Map<string, () => void> = new Map();
+    const sweepTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
+
+    const scheduleSweep = (uid: string, requestedAt: number) => {
+      const existing = sweepTimers.get(uid);
+      if (existing) clearTimeout(existing);
+
+      const elapsed = Date.now() - requestedAt;
+      const sweep = () => {
+        sweepTimers.delete(uid);
+        CheckInService.markPendingTimedOut(groupId, uid, requestedAt).catch(() => {});
+      };
+
+      if (elapsed >= PENDING_TIMEOUT_MS) {
+        sweep();
+      } else {
+        const wait = PENDING_TIMEOUT_MS - elapsed + TIMEOUT_SWEEP_BUFFER_MS;
+        sweepTimers.set(uid, setTimeout(sweep, wait));
+      }
+    };
+
+    const cancelSweep = (uid: string) => {
+      const timer = sweepTimers.get(uid);
+      if (timer) {
+        clearTimeout(timer);
+        sweepTimers.delete(uid);
+      }
+    };
 
     const groupMembersRef = database().ref(`/familyGroups/${groupId}/memberIds`);
 
@@ -22,6 +53,7 @@ class FamilyMemberService {
           cleanup();
           memberListeners.delete(uid);
           members.delete(uid);
+          cancelSweep(uid);
         }
       }
 
@@ -67,6 +99,16 @@ class FamilyMemberService {
             ? { location: val.location, checkIn: val.checkIn, lastLocationError: val.lastLocationError }
             : {};
           emitUpdate();
+
+          const checkIn = val?.checkIn;
+          if (
+            checkIn?.status === 'pending' &&
+            typeof checkIn.requestedAt === 'number'
+          ) {
+            scheduleSweep(uid, checkIn.requestedAt);
+          } else {
+            cancelSweep(uid);
+          }
         };
 
         userRef.on('value', onUser);
@@ -83,6 +125,8 @@ class FamilyMemberService {
     this.listeners.set(groupId, () => {
       groupMembersRef.off('value', onMembersChanged);
       for (const cleanup of memberListeners.values()) cleanup();
+      for (const timer of sweepTimers.values()) clearTimeout(timer);
+      sweepTimers.clear();
     });
 
     return () => {

@@ -1,4 +1,4 @@
-export type CheckInStatus = 'idle' | 'pending' | 'okay' | 'need_help';
+export type CheckInStatus = 'idle' | 'pending' | 'okay' | 'need_help' | 'timed_out';
 
 export interface User {
   uid: string;
@@ -33,6 +33,7 @@ export interface CheckIn {
   requestedByName: string;
   requestedAt: number;
   respondedAt?: number;
+  timedOutAt?: number;
 }
 
 export type LocationErrorReason =

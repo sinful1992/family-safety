@@ -140,6 +140,22 @@ class CheckInService {
       .catch(() => {});
   }
 
+  async markPendingTimedOut(
+    groupId: string,
+    targetUserId: string,
+    requestedAt: number,
+  ): Promise<void> {
+    const ref = database().ref(
+      `/familyGroups/${groupId}/memberStatus/${targetUserId}/checkIn`,
+    );
+    await ref.transaction((current: any) => {
+      if (!current) return undefined;
+      if (current.status !== 'pending') return undefined;
+      if (current.requestedAt !== requestedAt) return undefined;
+      return { ...current, status: 'timed_out', timedOutAt: Date.now() };
+    });
+  }
+
   async getCheckIn(checkInId: string): Promise<CheckInRecord | null> {
     const snap = await database().ref(`/checkIns/${checkInId}`).once('value');
     return snap.val();

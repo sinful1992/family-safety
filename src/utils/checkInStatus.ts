@@ -13,7 +13,7 @@ export function deriveDisplayStatus(
   now: number,
 ): { status: CheckInStatus; timedOut: boolean } {
   const rawStatus = (checkIn?.status as CheckInStatus) ?? 'idle';
-  const timedOut = isPendingTimedOut(checkIn, now);
+  const timedOut = rawStatus === 'timed_out' || isPendingTimedOut(checkIn, now);
   return { status: timedOut ? 'idle' : rawStatus, timedOut };
 }
 
