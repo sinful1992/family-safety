@@ -52,7 +52,7 @@ function formatCoord(lat: number, lng: number): string {
 }
 
 function staticMapUrl(lat: number, lng: number): string {
-  return `https://staticmap.openstreetmap.de/staticmap.php?center=${lat},${lng}&zoom=15&size=600x280`;
+  return `https://maps.wikimedia.org/img/osm-intl,15,${lat},${lng},600x280.png`;
 }
 
 function openInMaps(lat: number, lng: number, label: string) {
