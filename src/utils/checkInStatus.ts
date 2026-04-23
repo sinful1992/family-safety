@@ -28,6 +28,6 @@ export function usePendingTimeout(checkIn: CheckIn | undefined): number {
     }
     const timer = setTimeout(() => setNow(Date.now()), remaining);
     return () => clearTimeout(timer);
-  }, [checkIn?.status, checkIn?.requestedAt]);
+  }, [checkIn]);
   return now;
 }
