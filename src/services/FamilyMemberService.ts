@@ -43,6 +43,7 @@ class FamilyMemberService {
             photoURL: userData.photoURL,
             location: statusData.location,
             checkIn: statusData.checkIn,
+            lastLocationError: statusData.lastLocationError,
           };
           members.set(uid, combined);
           callback(Array.from(members.values()));
@@ -63,7 +64,7 @@ class FamilyMemberService {
         const onStatus = (snap: any) => {
           const val = snap.val();
           statusData = val
-            ? { location: val.location, checkIn: val.checkIn }
+            ? { location: val.location, checkIn: val.checkIn, lastLocationError: val.lastLocationError }
             : {};
           emitUpdate();
         };

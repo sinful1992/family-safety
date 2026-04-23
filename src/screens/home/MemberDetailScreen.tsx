@@ -9,6 +9,7 @@ import {
   ScrollView,
   Linking,
   Animated,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -16,11 +17,12 @@ import { formatDistanceToNow, format } from 'date-fns';
 import LinearGradient from 'react-native-linear-gradient';
 import Icon from 'react-native-vector-icons/Ionicons';
 import database from '@react-native-firebase/database';
-import { MemberStatus, User, CheckInStatus, Location, CheckIn } from '../../types';
+import { MemberStatus, User, CheckInStatus, Location, CheckIn, LocationError } from '../../types';
 import CheckInService from '../../services/CheckInService';
 import { useAlert } from '../../contexts/AlertContext';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../../styles/theme';
 import { deriveDisplayStatus, usePendingTimeout } from '../../utils/checkInStatus';
+import { describeLocationError } from '../../utils/locationError';
 
 const STATUS_COLOR: Record<CheckInStatus, string> = {
   okay:      COLORS.status.okay,
@@ -45,6 +47,10 @@ function formatCoord(lat: number, lng: number): string {
   const latStr = `${Math.abs(lat).toFixed(4)}°${lat >= 0 ? 'N' : 'S'}`;
   const lngStr = `${Math.abs(lng).toFixed(4)}°${lng >= 0 ? 'E' : 'W'}`;
   return `${latStr}, ${lngStr}`;
+}
+
+function staticMapUrl(lat: number, lng: number): string {
+  return `https://staticmap.openstreetmap.de/staticmap.php?center=${lat},${lng}&zoom=15&size=600x280`;
 }
 
 function openInMaps(lat: number, lng: number, label: string) {
@@ -96,9 +102,10 @@ const MemberDetailScreen: React.FC = () => {
   const { member, currentUser } = route.params as { member: MemberStatus; currentUser: User };
   const { showAlert } = useAlert();
 
-  const [liveStatus, setLiveStatus] = useState<{ location?: Location; checkIn?: CheckIn }>({
+  const [liveStatus, setLiveStatus] = useState<{ location?: Location; checkIn?: CheckIn; lastLocationError?: LocationError }>({
     location: member.location,
     checkIn: member.checkIn,
+    lastLocationError: member.lastLocationError,
   });
   const [repinging, setRepinging] = useState(false);
   const [pinged, setPinged] = useState(false);
@@ -138,7 +145,11 @@ const MemberDetailScreen: React.FC = () => {
     const ref = database().ref(`/familyGroups/${groupId}/memberStatus/${member.uid}`);
     const handler = (snap: any) => {
       const val = snap.val();
-      if (val) setLiveStatus({ location: val.location, checkIn: val.checkIn });
+      if (val) setLiveStatus({
+        location: val.location,
+        checkIn: val.checkIn,
+        lastLocationError: val.lastLocationError,
+      });
     };
     ref.on('value', handler);
     return () => ref.off('value', handler);
@@ -228,16 +239,40 @@ const MemberDetailScreen: React.FC = () => {
                   {lastSeenText ?? 'just now'} · ±{Math.round(liveStatus.location!.accuracy)} m
                 </Text>
               </>
+            ) : liveStatus.lastLocationError ? (
+              <>
+                <Text style={[styles.locationCoord, styles.locationError]}>
+                  {describeLocationError(liveStatus.lastLocationError.reason)}
+                </Text>
+                <Text style={styles.locationMeta}>
+                  {formatDistanceToNow(liveStatus.lastLocationError.at, { addSuffix: true })}
+                </Text>
+              </>
             ) : (
               <Text style={styles.locationCoord}>No location data</Text>
             )}
           </View>
 
-          {/* Map placeholder */}
+          {/* Map tile */}
           <View style={styles.mapPlaceholder}>
-            <Text style={styles.mapComment}>{'// map preview'}</Text>
-            {hasLocation && (
-              <View style={[styles.mapDot, { backgroundColor: statusColor }]} />
+            {hasLocation ? (
+              <>
+                <Image
+                  source={{ uri: staticMapUrl(liveStatus.location!.lat, liveStatus.location!.lng) }}
+                  style={styles.mapImage}
+                  resizeMode="cover"
+                />
+                <View style={[styles.mapDot, { backgroundColor: statusColor }]} />
+                <TouchableOpacity
+                  style={styles.mapAttributionWrap}
+                  onPress={() => Linking.openURL('https://www.openstreetmap.org/copyright').catch(() => {})}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.mapAttribution}>© OpenStreetMap</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <Text style={styles.mapComment}>{'// awaiting location'}</Text>
             )}
           </View>
 
@@ -444,22 +479,28 @@ const styles = StyleSheet.create({
     fontWeight: TYPOGRAPHY.fontWeight.semibold,
     marginTop: 2,
   },
+  locationError: {
+    color: COLORS.status.needHelp,
+  },
   locationMeta: {
     color: COLORS.text.tertiary,
     fontSize: TYPOGRAPHY.fontSize.sm,
     marginTop: 2,
   },
   mapPlaceholder: {
-    height: 140,
+    height: 160,
     backgroundColor: COLORS.background.tertiary,
     borderTopWidth: 1,
     borderBottomWidth: 1,
     borderColor: COLORS.border.subtle,
-    justifyContent: 'flex-start',
-    alignItems: 'flex-start',
-    padding: SPACING.sm,
-    // hatched pattern via opacity layering
+    justifyContent: 'center',
+    alignItems: 'center',
     overflow: 'hidden',
+  },
+  mapImage: {
+    ...StyleSheet.absoluteFillObject,
+    width: '100%',
+    height: '100%',
   },
   mapComment: {
     fontFamily: 'monospace',
@@ -468,13 +509,29 @@ const styles = StyleSheet.create({
   },
   mapDot: {
     position: 'absolute',
-    width: 12,
-    height: 12,
-    borderRadius: 6,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
     top: '50%',
-    left: '40%',
-    borderWidth: 2,
+    left: '50%',
+    marginTop: -7,
+    marginLeft: -7,
+    borderWidth: 2.5,
     borderColor: COLORS.background.primary,
+  },
+  mapAttributionWrap: {
+    position: 'absolute',
+    bottom: 4,
+    right: 6,
+    backgroundColor: 'rgba(13, 17, 23, 0.7)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  mapAttribution: {
+    color: COLORS.text.secondary,
+    fontSize: 9.5,
+    fontWeight: TYPOGRAPHY.fontWeight.medium,
   },
   mapActions: {
     flexDirection: 'row',

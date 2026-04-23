@@ -1,5 +1,6 @@
 package com.familysafety;
 
+import android.os.Build;
 import android.os.Bundle;
 import androidx.activity.EdgeToEdge;
 import com.facebook.react.ReactActivity;
@@ -15,6 +16,11 @@ public class MainActivity extends ReactActivity {
     EdgeToEdge.enable(this);
     SplashScreen.show(this);
     super.onCreate(savedInstanceState);
+
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+      setShowWhenLocked(true);
+      setTurnScreenOn(true);
+    }
   }
 
   @Override

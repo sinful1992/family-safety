@@ -15,8 +15,10 @@ import LinearGradient from 'react-native-linear-gradient';
 import notifee from '@notifee/react-native';
 import CheckInService from '../../services/CheckInService';
 import LocationService from '../../services/LocationService';
+import ScreenWakeService from '../../services/ScreenWakeService';
 import { useAlert } from '../../contexts/AlertContext';
 import { CheckInRecord, User } from '../../types';
+import { classifyLocationError, writeLocationError, clearLocationError } from '../../utils/locationError';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../../styles/theme';
 
 interface CheckInResponseScreenProps {
@@ -36,9 +38,17 @@ const CheckInResponseScreen: React.FC<CheckInResponseScreenProps> = ({ user }) =
 
   useEffect(() => {
     LocationService.getCurrentPosition()
-      .then(loc => CheckInService.shareLocationImmediate(user.uid, groupId, loc))
-      .catch(() => {});
+      .then(async loc => {
+        await CheckInService.shareLocationImmediate(user.uid, groupId, loc);
+        await clearLocationError(groupId, user.uid);
+      })
+      .catch(err => writeLocationError(groupId, user.uid, classifyLocationError(err)));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    ScreenWakeService.setKeepScreenOn(true);
+    return () => { ScreenWakeService.setKeepScreenOn(false); };
+  }, []);
 
   useEffect(() => {
     const unsubscribe = CheckInService.listenToCheckIn(checkInId, record => {
@@ -56,7 +66,13 @@ const CheckInResponseScreen: React.FC<CheckInResponseScreenProps> = ({ user }) =
   const handleRespond = async (response: 'okay' | 'need_help') => {
     setResponding(response);
     try {
-      const location = await LocationService.getCurrentPosition().catch(() => null);
+      let location = null;
+      try {
+        location = await LocationService.getCurrentPosition();
+        clearLocationError(groupId, user.uid);
+      } catch (err) {
+        writeLocationError(groupId, user.uid, classifyLocationError(err));
+      }
       await CheckInService.respondToCheckIn(
         checkInId,
         user.uid,

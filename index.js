@@ -5,8 +5,13 @@ import messaging from '@react-native-firebase/messaging';
 import database from '@react-native-firebase/database';
 import auth from '@react-native-firebase/auth';
 import Geolocation from 'react-native-geolocation-service';
-import notifee, { AndroidImportance, EventType } from '@notifee/react-native';
+import notifee, { AndroidCategory, AndroidImportance, EventType } from '@notifee/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import {
+  classifyLocationError,
+  writeLocationError,
+  clearLocationError,
+} from './src/utils/locationError';
 import App from './App';
 import { name as appName } from './app.json';
 
@@ -24,17 +29,24 @@ async function captureAndWriteLocation(userId, familyGroupId) {
   return new Promise(resolve => {
     Geolocation.getCurrentPosition(
       async position => {
-        await database()
-          .ref(`/familyGroups/${familyGroupId}/memberStatus/${userId}/location`)
-          .set({
-            lat: position.coords.latitude,
-            lng: position.coords.longitude,
-            accuracy: position.coords.accuracy,
-            timestamp: position.timestamp,
-          });
+        try {
+          await database()
+            .ref(`/familyGroups/${familyGroupId}/memberStatus/${userId}/location`)
+            .set({
+              lat: position.coords.latitude,
+              lng: position.coords.longitude,
+              accuracy: position.coords.accuracy,
+              timestamp: position.timestamp,
+            });
+          await clearLocationError(familyGroupId, userId);
+        } finally {
+          resolve(null);
+        }
+      },
+      async err => {
+        await writeLocationError(familyGroupId, userId, classifyLocationError(err));
         resolve(null);
       },
-      () => resolve(null),
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 },
     );
   });
@@ -56,19 +68,33 @@ messaging().setBackgroundMessageHandler(async remoteMessage => {
         if (familyGroupId) await captureAndWriteLocation(user.uid, familyGroupId);
       }
     } catch { }
-  }
 
-  await notifee.displayNotification({
-    id: data.check_in_id,
-    title: data.title,
-    body: data.body,
-    data: { checkInId: data.check_in_id, groupId: data.group_id, type: data.type },
-    android: {
-      channelId: CHANNEL_ID,
-      importance: AndroidImportance.HIGH,
-      pressAction: { id: 'default' },
-    },
-  });
+    await notifee.displayNotification({
+      id: data.check_in_id,
+      title: data.title,
+      body: data.body,
+      data: { checkInId: data.check_in_id, groupId: data.group_id, type: data.type },
+      android: {
+        channelId: CHANNEL_ID,
+        importance: AndroidImportance.HIGH,
+        category: AndroidCategory.CALL,
+        pressAction: { id: 'default', launchActivity: 'default' },
+        fullScreenAction: { id: 'default', launchActivity: 'default' },
+      },
+    });
+  } else {
+    await notifee.displayNotification({
+      id: data.check_in_id,
+      title: data.title,
+      body: data.body,
+      data: { checkInId: data.check_in_id, groupId: data.group_id, type: data.type },
+      android: {
+        channelId: CHANNEL_ID,
+        importance: AndroidImportance.HIGH,
+        pressAction: { id: 'default' },
+      },
+    });
+  }
 });
 
 // Handles notification tap while app is in background state.

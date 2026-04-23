@@ -8,6 +8,12 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
 
+    <!-- Prevents Android Doze/Standby from deferring FCM check-in pings -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
+    <!-- Lets check-in notifications launch a full-screen response over the lock screen -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+
     <!-- Emergency screen lock -->
     <uses-permission android:name="android.permission.BIND_DEVICE_ADMIN" />
 
@@ -32,6 +38,8 @@
         android:configChanges="keyboard|keyboardHidden|orientation|screenLayout|screenSize|smallestScreenSize|uiMode"
         android:launchMode="singleTask"
         android:windowSoftInputMode="adjustResize"
+        android:showWhenLocked="true"
+        android:turnScreenOn="true"
         android:exported="true">
         <intent-filter>
             <action android:name="android.intent.action.MAIN" />

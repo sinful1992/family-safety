@@ -3,9 +3,10 @@ import database from '@react-native-firebase/database';
 import { PermissionsAndroid, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import EncryptedStorage from 'react-native-encrypted-storage';
-import notifee, { AndroidImportance, EventType } from '@notifee/react-native';
+import notifee, { AndroidCategory, AndroidImportance, EventType } from '@notifee/react-native';
 import supabase from './SupabaseClient';
 import LocationService from './LocationService';
+import { classifyLocationError, writeLocationError, clearLocationError } from '../utils/locationError';
 
 type NavigateToCheckIn = (checkInId: string, groupId: string) => void;
 
@@ -112,12 +113,13 @@ class NotificationManager {
           if (tokenData) {
             const { userId, familyGroupId } = JSON.parse(tokenData);
             LocationService.getCurrentPosition()
-              .then(loc =>
-                database()
+              .then(async loc => {
+                await database()
                   .ref(`/familyGroups/${familyGroupId}/memberStatus/${userId}/location`)
-                  .set(loc),
-              )
-              .catch(() => {});
+                  .set(loc);
+                await clearLocationError(familyGroupId, userId);
+              })
+              .catch(err => writeLocationError(familyGroupId, userId, classifyLocationError(err)));
           }
         } catch { }
 
@@ -129,7 +131,9 @@ class NotificationManager {
           android: {
             channelId: CHANNEL_ID,
             importance: AndroidImportance.HIGH,
-            pressAction: { id: 'default' },
+            category: AndroidCategory.CALL,
+            pressAction: { id: 'default', launchActivity: 'default' },
+            fullScreenAction: { id: 'default', launchActivity: 'default' },
           },
         });
 

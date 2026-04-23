@@ -35,6 +35,18 @@ export interface CheckIn {
   respondedAt?: number;
 }
 
+export type LocationErrorReason =
+  | 'permission_denied'
+  | 'permission_blocked'
+  | 'timeout'
+  | 'unavailable'
+  | 'unknown';
+
+export interface LocationError {
+  reason: LocationErrorReason;
+  at: number;
+}
+
 export interface MemberStatus {
   uid: string;
   displayName: string | null;
@@ -42,6 +54,7 @@ export interface MemberStatus {
   photoURL?: string | null;
   location?: Location;
   checkIn?: CheckIn;
+  lastLocationError?: LocationError;
 }
 
 export interface CheckInRecord {
