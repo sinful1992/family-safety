@@ -93,7 +93,7 @@ messaging().setBackgroundMessageHandler(async remoteMessage => {
       data: { checkInId: data.check_in_id, groupId: data.group_id, type: data.type },
       android: {
         channelId: CHANNEL_ID,
-        importance: AndroidImportance.HIGH,
+        importance: AndroidImportance.DEFAULT,
         pressAction: { id: 'default' },
       },
     });

@@ -142,7 +142,7 @@ class NotificationManager {
         await notifee.displayNotification({
           title: data.title as string,
           body: data.body as string,
-          android: { channelId: CHANNEL_ID, importance: AndroidImportance.HIGH },
+          android: { channelId: CHANNEL_ID, importance: AndroidImportance.DEFAULT },
         });
       } else if (data.type === 'help_alert') {
         await notifee.displayNotification({
