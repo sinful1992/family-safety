@@ -18,6 +18,12 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Cache node_modules
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-nm-${{ hashFiles('package-lock.json') }}
+
       - name: Install dependencies
         run: npm install --legacy-peer-deps
 
@@ -66,24 +72,26 @@ jobs:
           key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
           restore-keys: ${{ runner.os }}-gradle-
 
+      - name: Cache C++ build outputs
+        uses: actions/cache@v4
+        with:
+          path: |
+            android/app/.cxx
+            android/app/build/intermediates/cxx
+          key: ${{ runner.os }}-cxx-${{ hashFiles('package-lock.json', 'android/app/build.gradle', 'android/build.gradle') }}
+          restore-keys: ${{ runner.os }}-cxx-
+
       - name: Make gradlew executable
         run: chmod +x android/gradlew
 
-      - name: Build release AAB and APK
+      - name: Build release APK
         run: |
-          cd android && ./gradlew bundleRelease assembleRelease \
+          cd android && ./gradlew assembleRelease \
             -PMYAPP_RELEASE_STORE_FILE=upload-key.keystore \
             -PMYAPP_RELEASE_STORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }} \
             -PMYAPP_RELEASE_KEY_ALIAS=${{ secrets.KEY_ALIAS }} \
             -PMYAPP_RELEASE_KEY_PASSWORD=${{ secrets.KEY_PASSWORD }} \
-            -PreactNativeArchitectures=armeabi-v7a,arm64-v8a
-
-      - name: Upload AAB
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-release-aab-${{ github.run_number }}
-          path: android/app/build/outputs/bundle/release/app-release.aab
-          retention-days: 30
+            -PreactNativeArchitectures=arm64-v8a
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
