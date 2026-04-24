@@ -28,7 +28,9 @@ That's it. No passive tracking. No always-on GPS drain. No surveillance feed. Ju
 
 ### Why this matters in real situations
 
-Passive tracking tells you where someone *was*. A ping tells you they're *conscious and able to respond*. Those are very different things when a family member is late, in an unfamiliar place, or hasn't been heard from.
+Passive tracking tells you where someone *was*. A ping tells you where they are *right now* — and if they can respond, whether they're okay. Those are very different things when a family member is late, in an unfamiliar place, or hasn't been heard from.
+
+Location is captured automatically the moment the check-in is received, before the person even taps anything. So even if they can't respond, you still get their location. If they can respond, you get their location *and* a confirmed status. Either way, you know more than you did.
 
 The binary response — okay or not okay — is intentional. In a stressful moment, one tap is all someone can manage. There's no form to fill out, no message to type.
 
