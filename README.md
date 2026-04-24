@@ -169,4 +169,4 @@ See `database.rules.json`. The key principle: users can only read and write data
 
 ## License
 
-MIT
+Proprietary — All rights reserved. See [LICENSE](LICENSE) for details.
