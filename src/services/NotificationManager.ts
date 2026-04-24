@@ -1,6 +1,6 @@
 import messaging from '@react-native-firebase/messaging';
 import database from '@react-native-firebase/database';
-import { PermissionsAndroid, Platform } from 'react-native';
+import { AppState, PermissionsAndroid, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import EncryptedStorage from 'react-native-encrypted-storage';
 import notifee, { AndroidCategory, AndroidImportance, AndroidVisibility, EventType } from '@notifee/react-native';
@@ -186,12 +186,19 @@ class NotificationManager {
       }
     });
 
-    // Background state: app foregrounded after tapping a Notifee notification
-    AsyncStorage.getItem('@pending_checkin').then(stored => {
-      if (!stored) return;
-      AsyncStorage.removeItem('@pending_checkin');
-      const { checkInId, groupId } = JSON.parse(stored);
-      this.navigate(checkInId, groupId, 500);
+    // Check pending check-in on init (killed state) and on every foreground
+    // transition (background → active via fullScreenAction or notification tap).
+    const checkPending = () => {
+      AsyncStorage.getItem('@pending_checkin').then(stored => {
+        if (!stored) return;
+        AsyncStorage.removeItem('@pending_checkin');
+        const { checkInId, groupId } = JSON.parse(stored);
+        this.navigate(checkInId, groupId, 300);
+      });
+    };
+    checkPending();
+    AppState.addEventListener('change', nextState => {
+      if (nextState === 'active') checkPending();
     });
 
     // FCM token refresh

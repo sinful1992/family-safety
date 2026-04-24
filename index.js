@@ -73,6 +73,13 @@ messaging().setBackgroundMessageHandler(async remoteMessage => {
   await ensureChannels();
 
   if (data.type === 'check_in_request') {
+    // Write pending check-in before displaying — fullScreenAction launches
+    // MainActivity from background but no other path navigates there.
+    await AsyncStorage.setItem('@pending_checkin', JSON.stringify({
+      checkInId: data.check_in_id,
+      groupId: data.group_id,
+    }));
+
     // Show notification immediately — don't await GPS before displaying
     await notifee.displayNotification({
       id: data.check_in_id,
