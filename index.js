@@ -39,28 +39,62 @@ async function ensureChannels() {
 }
 
 async function captureAndWriteLocation(userId, familyGroupId) {
+  const ACCURACY_GOAL = 50; // metres — stop once GPS is this accurate
+  const MAX_WAIT_MS = 20000;
+
   return new Promise(resolve => {
-    Geolocation.getCurrentPosition(
+    let watchId;
+    let firstWritten = false;
+    let finished = false;
+
+    const writeLocation = loc =>
+      database()
+        .ref(`/familyGroups/${familyGroupId}/memberStatus/${userId}/location`)
+        .set(loc)
+        .then(() => clearLocationError(familyGroupId, userId))
+        .catch(() => {});
+
+    const finish = async loc => {
+      if (finished) return;
+      finished = true;
+      Geolocation.clearWatch(watchId);
+      if (loc) await writeLocation(loc);
+      resolve(null);
+    };
+
+    const timer = setTimeout(() => finish(null), MAX_WAIT_MS);
+
+    watchId = Geolocation.watchPosition(
       async position => {
-        try {
-          await database()
-            .ref(`/familyGroups/${familyGroupId}/memberStatus/${userId}/location`)
-            .set({
-              lat: position.coords.latitude,
-              lng: position.coords.longitude,
-              accuracy: position.coords.accuracy,
-              timestamp: position.timestamp,
-            });
-          await clearLocationError(familyGroupId, userId);
-        } finally {
-          resolve(null);
+        if (finished) return;
+        const loc = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+          accuracy: position.coords.accuracy,
+          timestamp: position.timestamp,
+        };
+
+        // Ping 1: write first reading immediately (fast, rough cell/WiFi fix)
+        if (!firstWritten) {
+          firstWritten = true;
+          writeLocation(loc); // fire-and-forget
+        }
+
+        // Ping 2: write again once GPS gives an accurate fix, then stop
+        if (loc.accuracy <= ACCURACY_GOAL) {
+          clearTimeout(timer);
+          await finish(loc);
         }
       },
       async err => {
+        if (finished) return;
+        finished = true;
+        clearTimeout(timer);
+        Geolocation.clearWatch(watchId);
         await writeLocationError(familyGroupId, userId, classifyLocationError(err));
         resolve(null);
       },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 5000 },
+      { enableHighAccuracy: true, distanceFilter: 0, interval: 1000, fastestInterval: 500 },
     );
   });
 }

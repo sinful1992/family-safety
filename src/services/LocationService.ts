@@ -45,7 +45,7 @@ class LocationService {
     return PermissionsAndroid.check('android.permission.ACCESS_BACKGROUND_LOCATION' as never);
   }
 
-  async getCurrentPosition(): Promise<Location> {
+  async getCurrentPosition(accuracyThreshold = 50, timeout = 20000): Promise<Location> {
     const permission = await this.requestPermission();
     if (permission !== 'granted') {
       throw new Error(
@@ -56,21 +56,42 @@ class LocationService {
     }
 
     return new Promise((resolve, reject) => {
-      Geolocation.getCurrentPosition(
+      let best: Location | null = null;
+      let watchId: number;
+      let settled = false;
+
+      const done = (loc: Location | null, err?: Error) => {
+        if (settled) return;
+        settled = true;
+        Geolocation.clearWatch(watchId);
+        if (err) { reject(err); return; }
+        if (loc) { resolve(loc); return; }
+        reject(new Error('Location unavailable'));
+      };
+
+      const timer = setTimeout(() => done(best), timeout);
+
+      watchId = Geolocation.watchPosition(
         position => {
-          resolve({
+          const loc: Location = {
             lat: position.coords.latitude,
             lng: position.coords.longitude,
             accuracy: position.coords.accuracy,
             timestamp: position.timestamp,
-          });
+          };
+          if (!best || loc.accuracy < best.accuracy) {
+            best = loc;
+          }
+          if (loc.accuracy <= accuracyThreshold) {
+            clearTimeout(timer);
+            done(loc);
+          }
         },
-        error => reject(new Error(error.message)),
-        {
-          enableHighAccuracy: true,
-          timeout: 15000,
-          maximumAge: 10000,
+        error => {
+          clearTimeout(timer);
+          done(null, new Error(error.message));
         },
+        { enableHighAccuracy: true, distanceFilter: 0, interval: 1000, fastestInterval: 500 },
       );
     });
   }
