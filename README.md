@@ -6,16 +6,45 @@ Built with React Native, Firebase Realtime Database, and Supabase Edge Functions
 
 ---
 
-## What makes it different
+## The problem with existing apps
 
-Most family safety apps are built around passive location tracking — your phone reports GPS every few minutes whether you want it to or not. Family Safety works the other way around: **location is only shared in response to a check-in**, giving family members a nudge rather than a surveillance feed.
+Every major family safety app — Life360, Glympse, FamilyWhere — is built on **passive location tracking**. Your phone silently reports GPS every few minutes, all day, to a server. Nobody asked. Nobody confirmed they're okay. You just watch a dot move on a map and hope the absence of bad news means good news.
 
-A few things that make it work well in practice:
+Life360 added "No-Show Alerts" in 2025: it notifies you when a family member *doesn't arrive* somewhere expected. Still passive. Still waiting. A reviewer put it plainly: *"Life360 doesn't offer a single 'ask for check-in' button."*
+
+Bark is the closest in concept — a parent can request a teen to share location — but it's a parenting tool built around content monitoring, not a peer-to-peer family safety tool.
+
+**None of them do what Family Safety does: actively demand a response from a specific person, right now.**
+
+---
+
+## What this app does instead
+
+Family Safety is built around a single interaction: the **ping**.
+
+You tap a family member. Their phone wakes up — screen on, vibrating — even if the app was killed. They see one question: *Are you okay?* They tap **I'm Okay** or **Need Help**. Their location appears on your screen within seconds, captured automatically at the moment they responded.
+
+That's it. No passive tracking. No always-on GPS drain. No surveillance feed. Just a deliberate signal sent, and a deliberate answer returned.
+
+### Why this matters in real situations
+
+Passive tracking tells you where someone *was*. A ping tells you they're *conscious and able to respond*. Those are very different things when a family member is late, in an unfamiliar place, or hasn't been heard from.
+
+The binary response — okay or not okay — is intentional. In a stressful moment, one tap is all someone can manage. There's no form to fill out, no message to type.
+
+### What makes the technical implementation hard
+
+Most apps can send a push notification. The hard part is making it work when the app is fully killed, waking the screen reliably, capturing GPS before the user even responds, and writing that location to a live database that updates the requester's screen in real time — all in a few seconds. That's the engineering this app is built around.
+
+---
+
+## What makes it work well in practice
 
 - **Works from a killed app.** Check-in requests are delivered as FCM data-only messages, which means the target device wakes up and processes the alert even if the app was fully closed.
 - **Screen wake + vibration.** When a check-in arrives, the device screen turns on and vibrates for up to 45 seconds — hard to miss even if the phone is face-down on a table.
-- **Location on response, not on request.** GPS is captured at the moment the person responds and written to the database instantly. The requester sees it appear in real time on a live map.
+- **Location on response, not on request.** GPS is captured the moment the person responds and written to the database instantly. The requester sees it appear in real time on a live map.
 - **Emergency mode.** The "I Need Help" button broadcasts an alert to the entire family group simultaneously, not just one person.
+- **No subscription, no ads, no data sold.** Your family's location data lives in your own Firebase project. Nothing is sent to a third party.
 - **Self-healing tokens.** Stale FCM tokens are detected and cleaned up automatically so notifications don't silently fail after a device reinstall.
 - **Free map tiles.** Location is shown on a vector map powered by OpenFreeMap and MapLibre — no Google Maps API key or billing account needed.
 
