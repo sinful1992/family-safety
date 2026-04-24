@@ -102,8 +102,6 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ user, previewMembers }) => {
   }, [pinging, members, user]);
 
   const otherMembers = members.filter(m => m.uid !== user.uid);
-  const selfMember = members.find(m => m.uid === user.uid);
-  const allMembers = selfMember ? [selfMember, ...otherMembers] : otherMembers;
 
   const renderItem = ({ item }: { item: MemberStatus }) => (
     <View style={styles.cardWrapper}>
@@ -118,7 +116,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ user, previewMembers }) => {
   const listHeader = members.length > 0 ? (
     <>
       <FamilyPulse
-        members={allMembers}
+        members={otherMembers}
         pinging={pinging}
         onPingAll={handlePingAll}
         onNeedHelp={() => setShowNeedHelp(true)}
