@@ -26,7 +26,7 @@ async function ensureChannels() {
       importance: AndroidImportance.HIGH,
       visibility: AndroidVisibility.PUBLIC,
       vibration: true,
-      vibrationPattern: [300, 400, 200, 400, 200, 400],
+      vibrationPattern: [300, 1000, 150, 1000, 150, 1000],
       sound: 'default',
     }),
     notifee.createChannel({

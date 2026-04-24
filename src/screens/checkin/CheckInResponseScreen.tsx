@@ -48,7 +48,7 @@ const CheckInResponseScreen: React.FC<CheckInResponseScreenProps> = ({ user }) =
 
   useEffect(() => {
     ScreenWakeService.setKeepScreenOn(true);
-    Vibration.vibrate([0, 400, 200, 400, 200, 400], true);
+    Vibration.vibrate([0, 1000, 150, 1000, 150, 1000], true);
     return () => {
       ScreenWakeService.setKeepScreenOn(false);
       Vibration.cancel();
