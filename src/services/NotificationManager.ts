@@ -2,8 +2,8 @@ import messaging from '@react-native-firebase/messaging';
 import database from '@react-native-firebase/database';
 import { PermissionsAndroid, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import EncryptedStorage from 'react-native-encrypted-storage';
-import notifee, { AndroidCategory, AndroidImportance, AndroidVisibility, EventType } from '@notifee/react-native';
+import { SecureStorage as EncryptedStorage } from './SecureStorage';
+import notifee, { AndroidCategory, AndroidImportance, AndroidVisibility, EventType } from 'react-native-notify-kit';
 import supabase from './SupabaseClient';
 import LocationService from './LocationService';
 import { classifyLocationError, writeLocationError, clearLocationError } from '../utils/locationError';
@@ -188,9 +188,9 @@ class NotificationManager {
     });
 
     // Background state: app foregrounded after tapping a Notifee notification
-    AsyncStorage.getItem('@pending_checkin').then(stored => {
+    AsyncStorage.getItem('@pending_checkin').then(async stored => {
       if (!stored) return;
-      AsyncStorage.removeItem('@pending_checkin');
+      await AsyncStorage.removeItem('@pending_checkin');
       const { checkInId, groupId } = JSON.parse(stored);
       this.navigate(checkInId, groupId, 500);
     });

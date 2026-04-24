@@ -1,24 +1,14 @@
-import { Platform, PermissionsAndroid } from 'react-native';
-import Geolocation from 'react-native-geolocation-service';
-import { Location } from '../types';
+import { Platform } from 'react-native';
+import * as Location from 'expo-location';
+import { Location as LocationType } from '../types';
 
 type PermissionResult = 'granted' | 'denied' | 'blocked';
 
 class LocationService {
   async requestPermission(): Promise<PermissionResult> {
-    if (Platform.OS === 'android') {
-      const fine = await PermissionsAndroid.request(
-        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-      );
-
-      if (fine === PermissionsAndroid.RESULTS.GRANTED) return 'granted';
-      if (fine === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN) return 'blocked';
-      return 'denied';
-    }
-
-    const auth = await Geolocation.requestAuthorization('whenInUse');
-    if (auth === 'granted') return 'granted';
-    if (auth === 'disabled' || auth === 'restricted') return 'blocked';
+    const { status, canAskAgain } = await Location.requestForegroundPermissionsAsync();
+    if (status === 'granted') return 'granted';
+    if (!canAskAgain) return 'blocked';
     return 'denied';
   }
 
@@ -26,26 +16,25 @@ class LocationService {
     if (Platform.OS !== 'android') return;
     if ((Platform.Version as number) < 29) return;
     try {
-      await PermissionsAndroid.request(
-        'android.permission.ACCESS_BACKGROUND_LOCATION' as never,
-      );
+      await Location.requestBackgroundPermissionsAsync();
     } catch {
       // Best-effort — foreground alone is usually enough.
     }
   }
 
   async hasForegroundPermission(): Promise<boolean> {
-    if (Platform.OS !== 'android') return false;
-    return PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION);
+    const { status } = await Location.getForegroundPermissionsAsync();
+    return status === 'granted';
   }
 
   async hasBackgroundPermission(): Promise<boolean> {
     if (Platform.OS !== 'android') return false;
     if ((Platform.Version as number) < 29) return true;
-    return PermissionsAndroid.check('android.permission.ACCESS_BACKGROUND_LOCATION' as never);
+    const { status } = await Location.getBackgroundPermissionsAsync();
+    return status === 'granted';
   }
 
-  async getCurrentPosition(): Promise<Location> {
+  async getCurrentPosition(): Promise<LocationType> {
     const permission = await this.requestPermission();
     if (permission !== 'granted') {
       throw new Error(
@@ -55,24 +44,24 @@ class LocationService {
       );
     }
 
-    return new Promise((resolve, reject) => {
-      Geolocation.getCurrentPosition(
-        position => {
-          resolve({
-            lat: position.coords.latitude,
-            lng: position.coords.longitude,
-            accuracy: position.coords.accuracy,
-            timestamp: position.timestamp,
-          });
-        },
-        error => reject(new Error(error.message)),
-        {
-          enableHighAccuracy: true,
-          timeout: 15000,
-          maximumAge: 10000,
-        },
-      );
-    });
+    const timeout = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('Location request timed out')), 15000),
+    );
+
+    const position = await Promise.race([
+      Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+        mayShowUserSettingsDialog: false,
+      }),
+      timeout,
+    ]);
+
+    return {
+      lat: position.coords.latitude,
+      lng: position.coords.longitude,
+      accuracy: position.coords.accuracy ?? 0,
+      timestamp: position.timestamp,
+    };
   }
 }
 

@@ -3,10 +3,10 @@ import 'react-native-url-polyfill/auto';
 import { AppRegistry } from 'react-native';
 import messaging from '@react-native-firebase/messaging';
 import database from '@react-native-firebase/database';
-import Geolocation from 'react-native-geolocation-service';
-import notifee, { AndroidCategory, AndroidImportance, AndroidVisibility, EventType } from '@notifee/react-native';
+import * as Location from 'expo-location';
+import notifee, { AndroidCategory, AndroidImportance, AndroidVisibility, EventType } from 'react-native-notify-kit';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import EncryptedStorage from 'react-native-encrypted-storage';
+import { SecureStorage as EncryptedStorage } from './src/services/SecureStorage';
 import {
   classifyLocationError,
   writeLocationError,
@@ -40,30 +40,22 @@ async function ensureChannels() {
 }
 
 async function captureAndWriteLocation(userId, familyGroupId) {
-  return new Promise(resolve => {
-    Geolocation.getCurrentPosition(
-      async position => {
-        try {
-          await database()
-            .ref(`/familyGroups/${familyGroupId}/memberStatus/${userId}/location`)
-            .set({
-              lat: position.coords.latitude,
-              lng: position.coords.longitude,
-              accuracy: position.coords.accuracy,
-              timestamp: position.timestamp,
-            });
-          await clearLocationError(familyGroupId, userId);
-        } finally {
-          resolve(null);
-        }
-      },
-      async err => {
-        await writeLocationError(familyGroupId, userId, classifyLocationError(err));
-        resolve(null);
-      },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 5000 },
-    );
-  });
+  try {
+    const position = await Location.getCurrentPositionAsync({
+      accuracy: Location.Accuracy.High,
+    });
+    await database()
+      .ref(`/familyGroups/${familyGroupId}/memberStatus/${userId}/location`)
+      .set({
+        lat: position.coords.latitude,
+        lng: position.coords.longitude,
+        accuracy: position.coords.accuracy ?? 0,
+        timestamp: position.timestamp,
+      });
+    await clearLocationError(familyGroupId, userId);
+  } catch (err) {
+    await writeLocationError(familyGroupId, userId, classifyLocationError(err));
+  }
 }
 
 // Fires when a data-only FCM message arrives and the app is in background or killed state.
