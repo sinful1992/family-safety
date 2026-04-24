@@ -19,7 +19,14 @@ const CHANNEL_ALERTS = 'family-safety-alerts';
 const CHANNEL_INFO = 'family-safety-info';
 
 async function ensureChannels() {
-  await notifee.deleteChannel('family-safety');
+  // Delete both channels before recreating — Android freezes channel settings
+  // after first creation, so stale channels (e.g. created without sound) must
+  // be destroyed to pick up the correct sound/vibration config.
+  await Promise.all([
+    notifee.deleteChannel('family-safety'),
+    notifee.deleteChannel(CHANNEL_ALERTS),
+    notifee.deleteChannel(CHANNEL_INFO),
+  ]);
   await Promise.all([
     notifee.createChannel({
       id: CHANNEL_ALERTS,
@@ -27,7 +34,7 @@ async function ensureChannels() {
       importance: AndroidImportance.HIGH,
       visibility: AndroidVisibility.PUBLIC,
       vibration: true,
-      vibrationPattern: [0, 400, 200, 400, 200, 400],
+      vibrationPattern: [300, 400, 200, 400, 200, 400],
       sound: 'default',
     }),
     notifee.createChannel({

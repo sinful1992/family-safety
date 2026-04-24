@@ -80,7 +80,11 @@ class NotificationManager {
   }
 
   private async ensureChannels(): Promise<void> {
-    await notifee.deleteChannel('family-safety');
+    await Promise.all([
+      notifee.deleteChannel('family-safety'),
+      notifee.deleteChannel(CHANNEL_ALERTS),
+      notifee.deleteChannel(CHANNEL_INFO),
+    ]);
     await Promise.all([
       notifee.createChannel({
         id: CHANNEL_ALERTS,
@@ -88,7 +92,7 @@ class NotificationManager {
         importance: AndroidImportance.HIGH,
         visibility: AndroidVisibility.PUBLIC,
         vibration: true,
-        vibrationPattern: [0, 400, 200, 400, 200, 400],
+        vibrationPattern: [300, 400, 200, 400, 200, 400],
         sound: 'default',
       }),
       notifee.createChannel({

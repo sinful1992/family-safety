@@ -2,6 +2,7 @@ package com.familysafety;
 
 import android.os.Build;
 import android.os.Bundle;
+import android.os.PowerManager;
 import androidx.activity.EdgeToEdge;
 import com.facebook.react.ReactActivity;
 import com.facebook.react.ReactActivityDelegate;
@@ -21,6 +22,16 @@ public class MainActivity extends ReactActivity {
       setShowWhenLocked(true);
       setTurnScreenOn(true);
     }
+
+    // Force screen on when launched by a full-screen intent (check-in alert).
+    // setTurnScreenOn() is a best-effort hint; the WakeLock is what actually
+    // wakes the display from deep sleep.
+    @SuppressWarnings("deprecation")
+    PowerManager.WakeLock wl = ((PowerManager) getSystemService(POWER_SERVICE))
+        .newWakeLock(
+            PowerManager.SCREEN_BRIGHT_WAKE_LOCK | PowerManager.ACQUIRE_CAUSES_WAKEUP,
+            "FamilySafety:CheckInWake");
+    wl.acquire(10_000L);
   }
 
   @Override

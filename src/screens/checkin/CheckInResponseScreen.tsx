@@ -7,6 +7,7 @@ import {
   StatusBar,
   ActivityIndicator,
   Animated,
+  Vibration,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -47,7 +48,11 @@ const CheckInResponseScreen: React.FC<CheckInResponseScreenProps> = ({ user }) =
 
   useEffect(() => {
     ScreenWakeService.setKeepScreenOn(true);
-    return () => { ScreenWakeService.setKeepScreenOn(false); };
+    Vibration.vibrate([0, 400, 200, 400, 200, 400], true);
+    return () => {
+      ScreenWakeService.setKeepScreenOn(false);
+      Vibration.cancel();
+    };
   }, []);
 
   useEffect(() => {
