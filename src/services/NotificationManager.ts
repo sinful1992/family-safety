@@ -81,11 +81,6 @@ class NotificationManager {
 
   private async ensureChannels(): Promise<void> {
     await Promise.all([
-      notifee.deleteChannel('family-safety'),
-      notifee.deleteChannel(CHANNEL_ALERTS),
-      notifee.deleteChannel(CHANNEL_INFO),
-    ]);
-    await Promise.all([
       notifee.createChannel({
         id: CHANNEL_ALERTS,
         name: 'Family Safety Alerts',
