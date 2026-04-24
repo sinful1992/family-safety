@@ -1,8 +1,5 @@
 {
   "database": {
     "rules": "database.rules.json"
-  },
-  "react-native": {
-    "messaging_android_notification_delegation_enabled": false
   }
 }

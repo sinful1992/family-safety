@@ -12,7 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import LinearGradient from 'react-native-linear-gradient';
-import notifee from 'react-native-notify-kit';
+import notifee from '@notifee/react-native';
 import CheckInService from '../../services/CheckInService';
 import LocationService from '../../services/LocationService';
 import ScreenWakeService from '../../services/ScreenWakeService';

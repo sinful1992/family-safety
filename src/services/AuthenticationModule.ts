@@ -1,7 +1,7 @@
 import auth, { FirebaseAuthTypes } from '@react-native-firebase/auth';
 import database from '@react-native-firebase/database';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { SecureStorage as EncryptedStorage } from './SecureStorage';
+import EncryptedStorage from 'react-native-encrypted-storage';
 import {
   GoogleSignin,
   isSuccessResponse,
