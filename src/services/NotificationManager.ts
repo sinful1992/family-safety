@@ -9,6 +9,7 @@ import LocationService from './LocationService';
 import { classifyLocationError, writeLocationError, clearLocationError } from '../utils/locationError';
 
 type NavigateToCheckIn = (checkInId: string, groupId: string) => void;
+type NavigateToHelpAlert = (senderUid: string, senderName: string, groupId: string) => void;
 
 const CHANNEL_ALERTS = 'family-safety-alerts';
 const CHANNEL_INFO = 'family-safety-info';
@@ -16,10 +17,15 @@ const CHANNEL_INFO = 'family-safety-info';
 class NotificationManager {
   private fcmToken: string | null = null;
   private navigateToCheckIn: NavigateToCheckIn | null = null;
+  private navigateToHelpAlert: NavigateToHelpAlert | null = null;
   private listenersInitialized = false;
 
   setNavigationHandler(handler: NavigateToCheckIn): void {
     this.navigateToCheckIn = handler;
+  }
+
+  setHelpAlertNavigationHandler(handler: NavigateToHelpAlert): void {
+    this.navigateToHelpAlert = handler;
   }
 
   async requestPermissions(): Promise<boolean> {
@@ -108,6 +114,15 @@ class NotificationManager {
     }
   }
 
+  private navigateHelp(senderUid: string, senderName: string, groupId: string, delay = 0): void {
+    if (!this.navigateToHelpAlert) return;
+    if (delay) {
+      setTimeout(() => this.navigateToHelpAlert!(senderUid, senderName, groupId), delay);
+    } else {
+      this.navigateToHelpAlert(senderUid, senderName, groupId);
+    }
+  }
+
   initializeListeners(): void {
     if (this.listenersInitialized) return;
     this.listenersInitialized = true;
@@ -158,13 +173,27 @@ class NotificationManager {
         });
       } else if (data.type === 'help_alert') {
         await notifee.displayNotification({
+          id: `help_alert_${data.sender_user_id as string}`,
           title: data.title as string,
           body: data.body as string,
+          data: {
+            type: data.type,
+            senderUid: data.sender_user_id,
+            senderName: data.sender_name,
+            groupId: data.group_id,
+          },
           android: {
             channelId: CHANNEL_ALERTS,
-            pressAction: { id: 'default' },
+            category: AndroidCategory.CALL,
+            pressAction: { id: 'default', launchActivity: 'default' },
+            fullScreenAction: { id: 'default', launchActivity: 'default' },
           },
         });
+        this.navigateHelp(
+          data.sender_user_id as string,
+          data.sender_name as string,
+          data.group_id as string,
+        );
       }
     });
 
@@ -174,6 +203,8 @@ class NotificationManager {
       const d = detail.notification?.data;
       if (d?.type === 'check_in_request' && d.checkInId) {
         this.navigate(d.checkInId as string, d.groupId as string);
+      } else if (d?.type === 'help_alert' && d.senderUid) {
+        this.navigateHelp(d.senderUid as string, d.senderName as string, d.groupId as string);
       }
     });
 
@@ -183,6 +214,8 @@ class NotificationManager {
       const d = initial.notification.data;
       if (d?.type === 'check_in_request' && d.checkInId) {
         this.navigate(d.checkInId as string, d.groupId as string, 500);
+      } else if (d?.type === 'help_alert' && d.senderUid) {
+        this.navigateHelp(d.senderUid as string, d.senderName as string, d.groupId as string, 500);
       }
     });
 
@@ -194,6 +227,12 @@ class NotificationManager {
         AsyncStorage.removeItem('@pending_checkin');
         const { checkInId, groupId } = JSON.parse(stored);
         this.navigate(checkInId, groupId, 300);
+      });
+      AsyncStorage.getItem('@pending_helpalert').then(stored => {
+        if (!stored) return;
+        AsyncStorage.removeItem('@pending_helpalert');
+        const { senderUid, senderName, groupId } = JSON.parse(stored);
+        this.navigateHelp(senderUid, senderName, groupId, 300);
       });
     };
     checkPending();

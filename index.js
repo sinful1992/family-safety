@@ -138,12 +138,34 @@ messaging().setBackgroundMessageHandler(async remoteMessage => {
         }
       }
     } catch { }
-  } else {
+  } else if (data.type === 'help_alert') {
+    await AsyncStorage.setItem('@pending_helpalert', JSON.stringify({
+      senderUid: data.sender_user_id,
+      senderName: data.sender_name,
+      groupId: data.group_id,
+    }));
+
     await notifee.displayNotification({
-      id: data.check_in_id,
+      id: `help_alert_${data.sender_user_id}`,
       title: data.title,
       body: data.body,
-      data: { checkInId: data.check_in_id, groupId: data.group_id, type: data.type },
+      data: {
+        type: data.type,
+        senderUid: data.sender_user_id,
+        senderName: data.sender_name,
+        groupId: data.group_id,
+      },
+      android: {
+        channelId: CHANNEL_ALERTS,
+        category: AndroidCategory.CALL,
+        pressAction: { id: 'default', launchActivity: 'default' },
+        fullScreenAction: { id: 'default', launchActivity: 'default' },
+      },
+    });
+  } else {
+    await notifee.displayNotification({
+      title: data.title,
+      body: data.body,
       android: {
         channelId: CHANNEL_INFO,
         pressAction: { id: 'default' },
@@ -157,9 +179,15 @@ messaging().setBackgroundMessageHandler(async remoteMessage => {
 notifee.onBackgroundEvent(async ({ type, detail }) => {
   if (type === EventType.PRESS) {
     const d = detail.notification?.data;
-    if (d?.checkInId) {
+    if (d?.type === 'check_in_request' && d.checkInId) {
       await AsyncStorage.setItem('@pending_checkin', JSON.stringify({
         checkInId: d.checkInId,
+        groupId: d.groupId,
+      }));
+    } else if (d?.type === 'help_alert' && d.senderUid) {
+      await AsyncStorage.setItem('@pending_helpalert', JSON.stringify({
+        senderUid: d.senderUid,
+        senderName: d.senderName,
         groupId: d.groupId,
       }));
     }

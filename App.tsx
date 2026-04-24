@@ -44,6 +44,7 @@ import FamilyGroupScreen from './src/screens/auth/FamilyGroupScreen';
 import HomeScreen from './src/screens/home/HomeScreen';
 import MemberDetailScreen from './src/screens/home/MemberDetailScreen';
 import CheckInResponseScreen from './src/screens/checkin/CheckInResponseScreen';
+import HelpAlertScreen from './src/screens/checkin/HelpAlertScreen';
 import SettingsScreen from './src/screens/settings/SettingsScreen';
 
 const Stack = createStackNavigator();
@@ -142,6 +143,7 @@ function RootNavigator({ user }: { user: User | null }) {
       <Stack.Screen name="CheckInResponse">
         {() => <CheckInResponseScreen user={authedUser} />}
       </Stack.Screen>
+      <Stack.Screen name="HelpAlert" component={HelpAlertScreen} />
     </Stack.Navigator>
   );
 }
@@ -263,6 +265,10 @@ export default function App() {
 
     NotificationManager.setNavigationHandler((checkInId, groupId) => {
       navigate('CheckInResponse', { checkInId, groupId });
+    });
+
+    NotificationManager.setHelpAlertNavigationHandler((senderUid, senderName, groupId) => {
+      navigate('HelpAlert', { senderUid, senderName, groupId });
     });
 
     const unsubscribe = AuthenticationModule.onAuthStateChanged(updatedUser => {
